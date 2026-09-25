@@ -23,11 +23,11 @@ def get_match_odds(fixture_id, _headers):
     try:
         res = requests.get(url, headers=_headers).json()
         if res.get("response") and len(res["response"]) > 0:
-            bookmakers = res["response"][0].get("bookmakers", [])
+            bookmakers = res["response"].get("bookmakers", [])
             if bookmakers:
-                bets = bookmakers[0].get("bets", [])
+                bets = bookmakers.get("bets", [])
                 for bet in bets:
-                    if bet["id"] == 1:
+                    if bet["id"] == 1: # Пазар 1X2
                         return bet["values"]
     except:
         pass
@@ -40,72 +40,134 @@ def get_ai_prediction(fixture_id, _headers):
     try:
         res = requests.get(url, headers=_headers).json()
         if res.get("response") and len(res["response"]) > 0:
-            return res["response"][0]
-    except:
-        pass
-    return None
-
-# Кеширана функция за статистика и форма (Последни 10 мача)
-@st.cache_data(ttl=43200)
-def get_team_history(team_id, league_id, _headers):
-    url = f"https://api-sports.io{team_id}&league={league_id}&season={datetime.now().year}"
-    try:
-        res = requests.get(url, headers=_headers).json()
-        if res.get("response"):
             return res["response"]
     except:
         pass
     return None
 
+# Функция: Взема последните 10 мача като хронология
+@st.cache_data(ttl=43200)
+def get_team_last_10_fixtures(team_id, _headers):
+    url = f"https://api-sports.io{team_id}&last=10"
+    try:
+        res = requests.get(url, headers=_headers).json()
+        if res.get("response") and len(res["response"]) > 0:
+            results = []
+            total_goals = 0
+            btts_count = 0
+            for match in res["response"]:
+                home_id = match["teams"]["home"]["id"]
+                goals_home = match["goals"]["home"]
+                goals_away = match["goals"]["away"]
+                
+                if goals_home is None or goals_away is None:
+                    continue
+                
+                total_goals += (goals_home + goals_away)
+                if goals_home > 0 and goals_away > 0:
+                    btts_count += 1
+                
+                if home_id == team_id:
+                    if goals_home > goals_away: results.append("✅")
+                    elif goals_home == goals_away: results.append("🤝")
+                    else: results.append("❌")
+                else:
+                    if goals_away > goals_home: results.append("✅")
+                    elif goals_home == goals_away: results.append("🤝")
+                    else: results.append("❌")
+            
+            avg_goals = total_goals / len(results) if results else 0
+            btts_rate = (btts_count / len(results)) * 100 if results else 0
+            return {"form": results[:5], "win_rate": results.count("✅") * 10, "avg_goals": avg_goals, "btts_rate": btts_rate}
+    except:
+        pass
+    return {"form": ["Няма данни"], "win_rate": 0, "avg_goals": 0, "btts_rate": 0}
+
 if "matches" not in st.session_state:
     st.session_state.matches = None
+if "filter_mode" not in st.session_state:
+    st.session_state.filter_mode = "Всички"
 
-# Бутон за зареждане на тиража за деня
-if st.button("📅 ЗАРЕДИ ДНЕШНИЯ ТИРАЖ ПО ЛИГИ", use_container_width=True):
-    today = datetime.now().strftime("%Y-%m-%d")
-    url = f"https://{HOST}/fixtures?date={today}"
-    
-    with st.spinner("🔄 Зареждане и сортиране на тиража..."):
-        try:
-            response = requests.get(url, headers=headers)
-            data = response.json()
-            
-            if not data.get("response"):
-                st.error("❌ Няма налични мачове или грешен API ключ.")
-                st.session_state.matches = None
-            else:
-                # Сортиране по час на започване
-                sorted_fixtures = sorted(data["response"], key=lambda x: x['fixture']['date'])
-                
-                filtered_matches = {}
-                for item in sorted_fixtures:
-                    if item['fixture']['status']['short'] == "NS":
-                        raw_date = item['fixture']['date']
-                        # Извличане на часа във формат ЧЧ:ММ
-                        match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
-                        
-                        league_name = item['league']['name']
-                        home = item['teams']['home']['name']
-                        away = item['teams']['away']['name']
-                        
-                        # Красив текст за менюто: [18:30] Англия - Висша Лига | Арсенал - Челси
-                        key = f"[{match_time}] {item['league']['country']} - {league_name} | {home} - {away}"
-                        
-                        filtered_matches[key] = {
-                            "id": item['fixture']['id'],
-                            "home_id": item['teams']['home']['id'],
-                            "away_id": item['teams']['away']['id'],
-                            "league_id": item['league']['id']
-                        }
-                
-                st.session_state.matches = filtered_matches
-                st.toast("✅ Тиражът е зареден и подреден по часове!")
-        except Exception as e:
-            st.error(f"Грешка при връзката: {e}")
+# ДВА БУТОНА ЗА ЗАРЕЖДАНЕ
+col_btn1, col_btn2 = st.columns(2)
 
-# Главен интерфейс на програмата
+with col_btn1:
+    if st.button("📅 ЗАРЕДИ ДНЕШНИЯ ТИРАЖ", use_container_width=True):
+        st.session_state.filter_mode = "Всички"
+        today = datetime.now().strftime("%Y-%m-%d")
+        url = f"https://{HOST}/fixtures?date={today}"
+        
+        with st.spinner("🔄 Зареждане на тиража..."):
+            try:
+                response = requests.get(url, headers=headers)
+                data = response.json()
+                if data.get("response"):
+                    sorted_fixtures = sorted(data["response"], key=lambda x: x['fixture']['date'])
+                    filtered = {}
+                    for item in sorted_fixtures:
+                        if item['fixture']['status']['short'] == "NS":
+                            raw_date = item['fixture']['date']
+                            match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
+                            key = f"[{match_time}] {item['league']['country']} - {item['league']['name']} | {item['teams']['home']['name']} - {item['teams']['away']['name']}"
+                            filtered[key] = {"id": item['fixture']['id'], "home_id": item['teams']['home']['id'], "away_id": item['teams']['away']['id']}
+                    st.session_state.matches = filtered
+                    st.toast("✅ Всички предстоящи мачове са заредени!")
+            except:
+                st.error("Грешка при връзката.")
+
+with col_btn2:
+    if st.button("🔥 ФИЛТРИРАЙ САМО НАД 60% ШАНС", use_container_width=True):
+        st.session_state.filter_mode = "Топ"
+        today = datetime.now().strftime("%Y-%m-%d")
+        url = f"https://{HOST}/fixtures?date={today}"
+        
+        with st.spinner("🔍 Сканиране на тиража за мачове с висока сигурност (Прогнози/Голове)..."):
+            try:
+                response = requests.get(url, headers=headers)
+                data = response.json()
+                if data.get("response"):
+                    sorted_fixtures = sorted(data["response"], key=lambda x: x['fixture']['date'])
+                    high_sure_matches = {}
+                    
+                    for item in sorted_fixtures[:40]:
+                        if item['fixture']['status']['short'] == "NS":
+                            f_id = item['fixture']['id']
+                            pred = get_ai_prediction(f_id, headers)
+                            
+                            if pred and "predictions" in pred:
+                                try:
+                                    win_home = int(str(pred["predictions"]["percent"]["home"]).replace("%", ""))
+                                    win_away = int(str(pred["predictions"]["percent"]["away"]).replace("%", ""))
+                                    
+                                    # Проверка на пазара за Гол/Гол вероятност (ако съществува в отговора)
+                                    btts_pct = 0
+                                    if "btts" in pred["predictions"] and pred["predictions"]["btts"]:
+                                        btts_pct = int(str(pred["predictions"]["btts"]).replace("%", ""))
+                                    
+                                    # Включваме мача, ако има 1X2 сигурност или сигурност за голове/BTTS над 60%
+                                    if win_home >= 60 or win_away >= 60 or btts_pct >= 60:
+                                        raw_date = item['fixture']['date']
+                                        match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
+                                        max_pct = max(win_home, win_away, btts_pct)
+                                        
+                                        type_tag = "⚽ Знак" if max_pct in [win_home, win_away] else "🎯 Голове"
+                                        key = f"🔥 [{match_time}] {type_tag}: {max_pct}% | {item['teams']['home']['name']} - {item['teams']['away']['name']}"
+                                        high_sure_matches[key] = {"id": f_id, "home_id": item['teams']['home']['id'], "away_id": item['teams']['away']['id']}
+                                except:
+                                    pass
+                    
+                    if high_sure_matches:
+                        st.session_state.matches = high_sure_matches
+                        st.toast(f"✅ Намерени са {len(high_sure_matches)} топ мача!")
+                    else:
+                        st.warning("⚠️ Няма открити събития над 60% в извадката.")
+                        st.session_state.matches = None
+            except:
+                st.error("Грешка при сканирането.")
+
+# Основен интерфейс
 if st.session_state.matches:
-    st.subheader("🏟️ Изберете мачове за анализ и фиш")
+    st.subheader("🏟️ Изберете мачове за съвместен анализ" if st.session_state.filter_mode == "Всички" else "🎯 Изберете от филтрираните топ мачове")
     
     selected_matches = st.multiselect(
         "Маркирайте мачовете за преглед:", 
@@ -114,95 +176,29 @@ if st.session_state.matches:
     
     if selected_matches:
         if st.button("🏆 СТАРТИРАЙ МАСОВ АНАЛИЗ", use_container_width=True):
-            ticket_items = []  # За фиша на деня
+            ticket_items = []
             
             for match_name in selected_matches:
                 match_data = st.session_state.matches[match_name]
                 fixture_id = match_data["id"]
                 
-                with st.spinner(f"📊 Анализиране на {match_name.split('|')[-1]}..."):
+                with st.spinner(f"📊 Анализиране..."):
                     pred_data = get_ai_prediction(fixture_id, headers)
                     odds_data = get_match_odds(fixture_id, headers)
+                    home_stats = get_team_last_10_fixtures(match_data["home_id"], headers)
+                    away_stats = get_team_last_10_fixtures(match_data["away_id"], headers)
                     
-                    # Изтегляне на история за последните мачове
-                    home_stats = get_team_history(match_data["home_id"], match_data["league_id"], headers)
-                    away_stats = get_team_history(match_data["away_id"], match_data["league_id"], headers)
-                    
-                    # Извличане на имената на отборите
-                    clean_name = match_name.split(" | ")[-1]
-                    home_team, away_team = clean_name.split(" - ")
+                    clean_name = match_name.split(" | ")[-1] if "|" in match_name else match_name
+                    if " - " in clean_name:
+                        home_team, away_team = clean_name.split(" - ")
+                    else:
+                        home_team, away_team = "Домакин", "Гост"
                     
                     win_home, win_away, win_draw = 33, 33, 34
-                    advice = "Няма предоставена препоръка."
+                    btts_chance = 50
+                    advice = ""
                     
                     if pred_data and "predictions" in pred_data:
                         try:
                             win_home = int(str(pred_data["predictions"]["percent"]["home"]).replace("%", ""))
                             win_away = int(str(pred_data["predictions"]["percent"]["away"]).replace("%", ""))
-                            win_draw = int(str(pred_data["predictions"]["percent"]["draw"]).replace("%", ""))
-                            advice = pred_data["predictions"].get("advice", advice)
-                        except:
-                            pass
-                    
-                    # Генериране на визуален панел за мача
-                    with st.expander(f"📋 {match_name}", expanded=True):
-                        
-                        # 📈 Секция Статистика & Форма
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.markdown(f"**🏠 {home_team}:**")
-                            if home_stats and "form" in home_stats:
-                                form_str = " ".join(["✅" if c=="W" else "❌" if c=="L" else "🤝" for c in list(str(home_stats["form"]))[-5:]])
-                                st.write(f"Форма (последни 5): {form_str}")
-                                st.write(f"Вкарани голове: {home_stats['goals']['for']['total']['home']}")
-                            else:
-                                st.write("Форма: Няма данни")
-                        with col2:
-                            st.markdown(f"**🚀 {away_team}:**")
-                            if away_stats and "form" in away_stats:
-                                form_str = " ".join(["✅" if c=="W" else "❌" if c=="L" else "🤝" for c in list(str(away_stats["form"]))[-5:]])
-                                st.write(f"Форма (последни 5): {form_str}")
-                                st.write(f"Вкарани голове: {away_stats['goals']['for']['total']['away']}")
-                            else:
-                                st.write("Форма: Няма данни")
-                                
-                        # 💰 Секция Коефициенти
-                        odds_dict = {}
-                        if odds_data:
-                            odds_text = " | ".join([f"**{o['value']}:** {o['odd']}" for o in odds_data])
-                            st.markdown(f"💰 **Коефициенти (1X2):** {odds_text}")
-                            odds_dict = {o['value']: float(o['odd']) for o in odds_data}
-                        
-                        # 🤖 Извеждане на Консенсус Прогноза
-                        st.markdown(f"📊 **Вероятности:** 🏠 {win_home}% | 🤝 {win_draw}% | 🚀 {win_away}%")
-                        
-                        final_pick = ""
-                        final_odd = 1.00
-                        
-                        if win_home > 60:
-                            final_pick = f"1 (Победа за {home_team})"
-                            final_odd = odds_dict.get('Home', 1.50)
-                            st.success(f"🎯 **AI Консенсус:** {final_pick} (Сигурност: {win_home}%)")
-                        elif win_away > 60:
-                            final_pick = f"2 (Победа за {away_team})"
-                            final_odd = odds_dict.get('Away', 1.50)
-                            st.success(f"🎯 **AI Консенсус:** {final_pick} (Сигурност: {win_away}%)")
-                        else:
-                            st.info(f"🎯 **AI Консенсус:** Равностоен сблъсък. Препоръка: {advice}")
-                            if "Home" in advice or "1" in advice:
-                                final_pick = "1X (Двоен шанс)"
-                                final_odd = 1.30
-                            else:
-                                final_pick = "Под/Над голове"
-                                final_odd = 1.60
-                        
-                        # Добавяне към списъка за фиш, ако имаме категорична прогноза
-                        if final_pick and final_odd > 1.05:
-                            ticket_items.append({"match": clean_name, "pick": final_pick, "odd": final_odd})
-            
-            # 🎫 ГЕНЕРИРАНЕ НА ФИШ НА ДЕНЯ
-            if ticket_items:
-                st.markdown("---")
-                st.subheader("🎫 Генериран Фиш на Деня (Комбо)")
-                total_odd = 1.0
-                
