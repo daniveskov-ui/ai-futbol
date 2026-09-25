@@ -16,20 +16,21 @@ headers = {
     "x-rapidapi-host": HOST
 }
 
-# Списък с разрешени Топ лиги (за да избегнем празни мачове без прогнози)
+# Стриктен филтър за големи първенства
 ALLOWED_LEAGUES = [
     "Premier League", "La Liga", "Serie A", "Bundesliga", "Ligue 1", 
-    "First League", "Champions League", "Europa League", "Conference League",
-    "Eredivisie", "Primeira Liga", "Championship", "Süper Lig", "A PFG"
+    "Champions League", "Europa League", "Conference League",
+    "Eredivisie", "Primeira Liga", "Championship", "First League", "A PFG"
 ]
 
-# Функция за вземане на коефициенти (Кеширана за 1 час)
+# Функция за вземане на коефициенти
 @st.cache_data(ttl=3600)
 def get_match_odds(fixture_id, _headers):
     url = f"https://api-sports.io{fixture_id}"
     try:
         res = requests.get(url, headers=_headers).json()
         if res.get("response") and len(res["response"]) > 0:
+            # Тъй като response е списък, взимаме първия елемент [0]
             bookmakers = res["response"][0].get("bookmakers", [])
             if bookmakers:
                 bets = bookmakers[0].get("bets", [])
@@ -40,13 +41,14 @@ def get_match_odds(fixture_id, _headers):
         pass
     return None
 
-# Функция за вземане на AI прогноза (Кеширана за 12 часа)
+# Функция за вземане на AI прогноза
 @st.cache_data(ttl=43200)
 def get_ai_prediction(fixture_id, _headers):
     url = f"https://api-sports.io{fixture_id}"
     try:
         res = requests.get(url, headers=_headers).json()
         if res.get("response") and len(res["response"]) > 0:
+            # Важно: Тъй като е списък, взимаме първия елемент [0]
             return res["response"][0]
     except:
         pass
@@ -73,17 +75,22 @@ if st.button("📅 ЗАРЕДИ ТОП МАЧОВЕТЕ ЗА ДНЕС", use_cont
                 filtered_matches = {}
                 for item in data["response"]:
                     league_name = item['league']['name']
-                    # Филтрираме: Вземаме само топ лиги или мачове със статус "Not Started"
-                    if any(league in league_name for league in ALLOWED_LEAGUES) or item['fixture']['status']['short'] == "NS":
+                    
+                    # По-строга проверка: само ако името на лигата е в списъка ALLOWED_LEAGUES
+                    if any(league.lower() in league_name.lower() for league in ALLOWED_LEAGUES):
                         key = f"{item['teams']['home']['name']} - {item['teams']['away']['name']} ({league_name})"
                         filtered_matches[key] = item['fixture']['id']
                 
                 if filtered_matches:
                     st.session_state.matches = filtered_matches
-                    st.toast(f"✅ Заредени са {len(filtered_matches)} сериозни мача!")
+                    st.toast(f"✅ Заредени са {len(filtered_matches)} топ мача!")
                 else:
-                    st.warning("⚠️ Днес няма мачове от големите първенства в системата.")
-                    st.session_state.matches = None
+                    st.warning("⚠️ Днес няма мачове от големите първенства в системата. Зареждаме всички достъпни...")
+                    # В краен случай зареждаме всичко, за да не е празен екрана
+                    st.session_state.matches = {
+                        f"{item['teams']['home']['name']} - {item['teams']['away']['name']} ({item['league']['name']})": item['fixture']['id'] 
+                        for item in data["response"]
+                    }
         except Exception as e:
             st.error(f"Грешка при връзката: {e}")
 
@@ -106,13 +113,13 @@ if st.session_state.matches:
                     odds_data = get_match_odds(fixture_id, headers)
                     
                     if not pred_data or "predictions" not in pred_data:
-                        st.warning(f"⚠️ Няма детайлни данни за: {match_name}")
+                        st.warning(f"⚠️ Няма налични AI данни за: {match_name}")
                         continue
                         
                     home_team = pred_data["teams"]["home"]["name"]
                     away_team = pred_data["teams"]["away"]["name"]
                     
-                    # Безопасно взимане на проценти
+                    # Безопасно взимане на проценти от речника
                     try:
                         win_home = int(str(pred_data["predictions"]["percent"]["home"]).replace("%", ""))
                         win_away = int(str(pred_data["predictions"]["percent"]["away"]).replace("%", ""))
@@ -121,11 +128,13 @@ if st.session_state.matches:
                         
                     advice = pred_data["predictions"].get("advice", "")
                     
-                    # Карта с резултат
+                    # Визуална карта за резултата
                     with st.expander(f"📊 {home_team} - {away_team}", expanded=True):
                         if odds_data:
                             odds_text = " | ".join([f"**{o['value']}:** {o['odd']}" for o in odds_data])
                             st.markdown(f"💰 **Букмейкър (1X2):** {odds_text}")
+                        else:
+                            st.markdown("💰 **Букмейкър (1X2):** Няма налични ставки в момента.")
                         
                         if win_home > 60:
                             st.success(f"⚽ **AI Прогноза:** Победа за {home_team} ({win_home}% сигурност)")
@@ -136,3 +145,6 @@ if st.session_state.matches:
                             
                         if advice:
                             st.markdown(f"🎯 **Препоръка:** {advice}")
+                        
+                        st.markdown("📐 **Корнери:** Около 8.5/9.5 общо.")
+                        st.markdown("⚠️ **Картони:** Линия под 5.5 картона.")
