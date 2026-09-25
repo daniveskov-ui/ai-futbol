@@ -16,57 +16,51 @@ headers = {
     "x-rapidapi-host": HOST
 }
 
-# Кеширана функция за вземане на коефициенти
-@st.cache_data(ttl=3600)
+# Функция за вземане на коефициенти
 def get_match_odds(fixture_id, _headers):
     url = f"https://api-sports.io{fixture_id}"
-    try:
-        res = requests.get(url, headers=_headers).json()
-        if res.get("response") and len(res["response"]) > 0:
-            bookmakers = res["response"][0].get("bookmakers", [])
-            if bookmakers:
-                bets = bookmakers[0].get("bets", [])
-                for bet in bets:
-                    if bet["id"] == 1:
-                        return bet["values"]
-    except:
-        pass
-    return None
+    res = requests.get(url, headers=_headers).json()
+    response_data = res.get("response", [])
+    if response_data and len(response_data) > 0:
+        bookmakers = response_data[0].get("bookmakers", [])
+        if bookmakers and len(bookmakers) > 0:
+            bets = bookmakers[0].get("bets", [])
+            for bet in bets:
+                if bet.get("id") == 1:
+                    return bet.get("values", [])
+    return []
 
-# Кеширана функция за вземане на AI прогноза
-@st.cache_data(ttl=43200)
+# Функция за вземане на AI прогноза
 def get_ai_prediction(fixture_id, _headers):
     url = f"https://api-sports.io{fixture_id}"
-    try:
-        res = requests.get(url, headers=_headers).json()
-        if res.get("response") and len(res["response"]) > 0:
-            return res["response"][0]
-    except:
-        pass
-    return None
+    res = requests.get(url, headers=_headers).json()
+    response_data = res.get("response", [])
+    if response_data and len(response_data) > 0:
+        return response_data[0]
+    return {}
 
 # Функция: Взема последните 10 мача като хронология
-@st.cache_data(ttl=43200)
 def get_team_last_10_fixtures(team_id, _headers):
     url = f"https://api-sports.io{team_id}&last=10"
-    try:
-        res = requests.get(url, headers=_headers).json()
-        if res.get("response") and len(res["response"]) > 0:
-            results = []
-            total_goals = 0
-            btts_count = 0
-            for match in res["response"]:
-                home_id = match["teams"]["home"]["id"]
-                goals_home = match["goals"]["home"]
-                goals_away = match["goals"]["away"]
-                
-                if goals_home is None or goals_away is None:
-                    continue
-                
+    res = requests.get(url, headers=_headers).json()
+    response_data = res.get("response", [])
+    
+    results = []
+    total_goals = 0
+    btts_count = 0
+    
+    if response_data:
+        for match in response_data:
+            goals = match.get("goals", {})
+            goals_home = goals.get("home")
+            goals_away = goals.get("away")
+            
+            if goals_home is not None and goals_away is not None:
                 total_goals += (goals_home + goals_away)
                 if goals_home > 0 and goals_away > 0:
                     btts_count += 1
                 
+                home_id = match.get("teams", {}).get("home", {}).get("id")
                 if home_id == team_id:
                     if goals_home > goals_away: results.append("✅")
                     elif goals_home == goals_away: results.append("🤝")
@@ -75,13 +69,10 @@ def get_team_last_10_fixtures(team_id, _headers):
                     if goals_away > goals_home: results.append("✅")
                     elif goals_home == goals_away: results.append("🤝")
                     else: results.append("❌")
-            
-            avg_goals = total_goals / len(results) if len(results) > 0 else 0
-            btts_rate = (btts_count / len(results)) * 100 if len(results) > 0 else 0
-            return {"form": results[:5], "win_rate": results.count("✅") * 10, "avg_goals": avg_goals, "btts_rate": btts_rate}
-    except:
-        pass
-    return {"form": ["Няма данни"], "win_rate": 0, "avg_goals": 0, "btts_rate": 0}
+                    
+    avg_goals = total_goals / len(results) if len(results) > 0 else 0
+    btts_rate = (btts_count / len(results)) * 100 if len(results) > 0 else 0
+    return {"form": results[:5], "win_rate": results.count("✅") * 10, "avg_goals": avg_goals, "btts_rate": btts_rate}
 
 if "matches" not in st.session_state:
     st.session_state.matches = None
@@ -97,23 +88,24 @@ with col_btn1:
         today = datetime.now().strftime("%Y-%m-%d")
         url = f"https://{HOST}/fixtures?date={today}"
         
-        with st.spinner("🔄 Зареждане на тиража..."):
-            try:
-                response = requests.get(url, headers=headers)
-                data = response.json()
-                if data.get("response"):
-                    sorted_fixtures = sorted(data["response"], key=lambda x: x['fixture']['date'])
-                    filtered = {}
-                    for item in sorted_fixtures:
-                        if item['fixture']['status']['short'] == "NS":
-                            raw_date = item['fixture']['date']
-                            match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
-                            key = f"[{match_time}] {item['league']['country']} - {item['league']['name']} | {item['teams']['home']['name']} - {item['teams']['away']['name']}"
-                            filtered[key] = {"id": item['fixture']['id'], "home_id": item['teams']['home']['id'], "away_id": item['teams']['away']['id']}
-                    st.session_state.matches = filtered
-                    st.toast("✅ Всички предстоящи мачове са заредени!")
-            except:
-                st.error("Грешка при връзката.")
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        response_data = data.get("response", [])
+        if response_data:
+            sorted_fixtures = sorted(response_data, key=lambda x: x.get('fixture', {}).get('date', ''))
+            filtered = {}
+            for item in sorted_fixtures:
+                fixture_info = item.get('fixture', {})
+                status = fixture_info.get('status', {}).get('short', '')
+                if status == "NS":
+                    raw_date = fixture_info.get('date', '')
+                    match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
+                    league_info = item.get('league', {})
+                    teams_info = item.get('teams', {})
+                    key = f"[{match_time}] {league_info.get('country')} - {league_info.get('name')} | {teams_info.get('home', {}).get('name')} - {teams_info.get('away', {}).get('name')}"
+                    filtered[key] = {"id": fixture_info.get('id'), "home_id": teams_info.get('home', {}).get('id'), "away_id": teams_info.get('away', {}).get('id')}
+            st.session_state.matches = filtered
+            st.toast("✅ Всички мачове са заредени!")
 
 with col_btn2:
     if st.button("🔥 ФИЛТРИРАЙ САМО НАД 60% ШАНС", use_container_width=True):
@@ -121,86 +113,89 @@ with col_btn2:
         today = datetime.now().strftime("%Y-%m-%d")
         url = f"https://{HOST}/fixtures?date={today}"
         
-        with st.spinner("🔍 Сканиране на тиража..."):
-            try:
-                response = requests.get(url, headers=headers)
-                data = response.json()
-                if data.get("response"):
-                    sorted_fixtures = sorted(data["response"], key=lambda x: x['fixture']['date'])
-                    high_sure_matches = {}
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        response_data = data.get("response", [])
+        if response_data:
+            sorted_fixtures = sorted(response_data, key=lambda x: x.get('fixture', {}).get('date', ''))
+            high_sure_matches = {}
+            
+            for item in sorted_fixtures[:30]:
+                fixture_info = item.get('fixture', {})
+                status = fixture_info.get('status', {}).get('short', '')
+                if status == "NS":
+                    f_id = fixture_info.get('id')
+                    pred = get_ai_prediction(f_id, headers)
                     
-                    for item in sorted_fixtures[:40]:
-                        if item['fixture']['status']['short'] == "NS":
-                            f_id = item['fixture']['id']
-                            pred = get_ai_prediction(f_id, headers)
-                            
-                            if pred and "predictions" in pred:
-                                win_home = 0
-                                win_away = 0
-                                btts_pct = 0
-                                
-                                try:
-                                    win_home = int(str(pred["predictions"]["percent"]["home"]).replace("%", ""))
-                                    win_away = int(str(pred["predictions"]["percent"]["away"]).replace("%", ""))
-                                    if "btts" in pred["predictions"] and pred["predictions"]["btts"]:
-                                        btts_pct = int(str(pred["predictions"]["btts"]).replace("%", ""))
-                                except:
-                                    pass
-                                
-                                if win_home >= 60 or win_away >= 60 or btts_pct >= 60:
-                                    raw_date = item['fixture']['date']
-                                    match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
-                                    max_pct = max(win_home, win_away, btts_pct)
-                                    
-                                    type_tag = "⚽ Знак" if max_pct in [win_home, win_away] else "🎯 Голове"
-                                    key = f"🔥 [{match_time}] {type_tag}: {max_pct}% | {item['teams']['home']['name']} - {item['teams']['away']['name']}"
-                                    high_sure_matches[key] = {"id": f_id, "home_id": item['teams']['home']['id'], "away_id": item['teams']['away']['id']}
-                    
-                    if high_sure_matches:
-                        st.session_state.matches = high_sure_matches
-                        st.toast(f"✅ Намерени са {len(high_sure_matches)} топ мача!")
-                    else:
-                        st.warning("⚠️ Няма открити събития над 60% в извадката.")
-                        st.session_state.matches = None
-            except:
-                st.error("Грешка при сканирането.")
+                    if pred and "predictions" in pred:
+                        predictions_data = pred.get("predictions", {})
+                        percent_data = predictions_data.get("percent", {})
+                        
+                        try:
+                            win_home = int(str(percent_data.get("home", "0")).replace("%", ""))
+                            win_away = int(str(percent_data.get("away", "0")).replace("%", ""))
+                            btts_pct = int(str(predictions_data.get("btts", "0")).replace("%", ""))
+                        except:
+                            win_home, win_away, btts_pct = 0, 0, 0
+                        
+                        if win_home >= 60 or win_away >= 60 or btts_pct >= 60:
+                            raw_date = fixture_info.get('date', '')
+                            match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
+                            max_pct = max(win_home, win_away, btts_pct)
+                            type_tag = "⚽ Знак" if max_pct in [win_home, win_away] else "🎯 Голове"
+                            teams_info = item.get('teams', {})
+                            key = f"🔥 [{match_time}] {type_tag}: {max_pct}% | {teams_info.get('home', {}).get('name')} - {teams_info.get('away', {}).get('name')}"
+                            high_sure_matches[key] = {"id": f_id, "home_id": teams_info.get('home', {}).get('id'), "away_id": teams_info.get('away', {}).get('id')}
+            
+            if high_sure_matches:
+                st.session_state.matches = high_sure_matches
+                st.toast(f"✅ Намерени са {len(high_sure_matches)} топ мача!")
+            else:
+                st.warning("⚠️ Няма открити силни събития в тази извадка.")
 
 # Основен интерфейс
 if st.session_state.matches:
-    st.subheader("🏟️ Изберете мачове за съвместен анализ" if st.session_state.filter_mode == "Всички" else "🎯 Изберете от филтрираните топ мачове")
+    st.subheader("🏟️ Изберете мачове за анализ и фиш" if st.session_state.filter_mode == "Всички" else "🎯 Топ филтрирани мачове")
     
-    selected_matches = st.multiselect(
-        "Маркирайте мачовете за преглед:", 
-        options=list(st.session_state.matches.keys())
-    )
+    selected_matches = st.multiselect("Маркирайте мачовете за преглед:", options=list(st.session_state.matches.keys()))
     
-    if selected_matches:
-        if st.button("🏆 СТАРТИРАЙ МАСОВ АНАЛИЗ", use_container_width=True):
-            ticket_items = []
+    if selected_matches and st.button("🏆 СТАРТИРАЙ МАСОВ АНАЛИЗ", use_container_width=True):
+        ticket_items = []
+        
+        for match_name in selected_matches:
+            match_data = st.session_state.matches[match_name]
+            fixture_id = match_data["id"]
             
-            for match_name in selected_matches:
-                match_data = st.session_state.matches[match_name]
-                fixture_id = match_data["id"]
-                
-                with st.spinner(f"📊 Анализиране..."):
-                    pred_data = get_ai_prediction(fixture_id, headers)
-                    odds_data = get_match_odds(fixture_id, headers)
-                    home_stats = get_team_last_10_fixtures(match_data["home_id"], headers)
-                    away_stats = get_team_last_10_fixtures(match_data["away_id"], headers)
-                    
-                    clean_name = match_name.split(" | ")[-1] if "|" in match_name else match_name
-                    if " - " in clean_name:
-                        home_team, away_team = clean_name.split(" - ")
-                    else:
-                        home_team, away_team = "Домакин", "Гост"
-                    
-                    win_home, win_away, win_draw = 33, 33, 34
-                    btts_chance = 50
-                    advice = ""
-                    
-                    if pred_data and "predictions" in pred_data:
-                        try:
-                            win_home = int(str(pred_data["predictions"]["percent"]["home"]).replace("%", ""))
-                            win_away = int(str(pred_data["predictions"]["percent"]["away"]).replace("%", ""))
-                            win_draw = int(str(pred_data["predictions"]["percent"]["draw"]).replace("%", ""))
-                            advice = pred_data["predictions"].get("advice", "")
+            pred_data = get_ai_prediction(fixture_id, headers)
+            odds_data = get_match_odds(fixture_id, headers)
+            home_stats = get_team_last_10_fixtures(match_data["home_id"], headers)
+            away_stats = get_team_last_10_fixtures(match_data["away_id"], headers)
+            
+            clean_name = match_name.split(" | ")[-1] if "|" in match_name else match_name
+            home_team, away_team = clean_name.split(" - ") if " - " in clean_name else ("Домакин", "Гост")
+            
+            win_home, win_away, win_draw, btts_chance = 33, 33, 34, 50
+            advice = "Равностоен мач."
+            
+            if pred_data and "predictions" in pred_data:
+                predictions_data = pred_data.get("predictions", {})
+                percent_data = predictions_data.get("percent", {})
+                try:
+                    win_home = int(str(percent_data.get("home", "33")).replace("%", ""))
+                    win_away = int(str(percent_data.get("away", "33")).replace("%", ""))
+                    win_draw = int(str(percent_data.get("draw", "34")).replace("%", ""))
+                    advice = predictions_data.get("advice", "Няма съвет")
+                    if predictions_data.get("btts"):
+                        btts_chance = int(str(predictions_data.get("btts")).replace("%", ""))
+                except:
+                    pass
+            
+            calc_home = int((home_stats["win_rate"] + (100 - away_stats["win_rate"])) / 2)
+            calc_away = int((away_stats["win_rate"] + (100 - home_stats["win_rate"])) / 2)
+            combined_btts_rate = int((home_stats["btts_rate"] + away_stats["btts_rate"]) / 2)
+            combined_goals = (home_stats["avg_goals"] + away_stats["avg_goals"]) / 2
+            
+            with st.expander(f"📋 {match_name}", expanded=True):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown(f"**🏠 {home_team}:**")
