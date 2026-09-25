@@ -23,9 +23,9 @@ def get_match_odds(fixture_id, _headers):
     try:
         res = requests.get(url, headers=_headers).json()
         if res.get("response") and len(res["response"]) > 0:
-            bookmakers = res["response"].get("bookmakers", [])
+            bookmakers = res["response"][0].get("bookmakers", [])
             if bookmakers:
-                bets = bookmakers.get("bets", [])
+                bets = bookmakers[0].get("bets", [])
                 for bet in bets:
                     if bet["id"] == 1: # Пазар 1X2
                         return bet["values"]
@@ -40,7 +40,7 @@ def get_ai_prediction(fixture_id, _headers):
     try:
         res = requests.get(url, headers=_headers).json()
         if res.get("response") and len(res["response"]) > 0:
-            return res["response"]
+            return res["response"][0]
     except:
         pass
     return None
@@ -121,7 +121,7 @@ with col_btn2:
         today = datetime.now().strftime("%Y-%m-%d")
         url = f"https://{HOST}/fixtures?date={today}"
         
-        with st.spinner("🔍 Сканиране на тиража за мачове с висока сигурност (Прогнози/Голове)..."):
+        with st.spinner("🔍 Сканиране на тиража за мачове с висока сигурност..."):
             try:
                 response = requests.get(url, headers=headers)
                 data = response.json()
@@ -139,12 +139,10 @@ with col_btn2:
                                     win_home = int(str(pred["predictions"]["percent"]["home"]).replace("%", ""))
                                     win_away = int(str(pred["predictions"]["percent"]["away"]).replace("%", ""))
                                     
-                                    # Проверка на пазара за Гол/Гол вероятност (ако съществува в отговора)
                                     btts_pct = 0
                                     if "btts" in pred["predictions"] and pred["predictions"]["btts"]:
                                         btts_pct = int(str(pred["predictions"]["btts"]).replace("%", ""))
                                     
-                                    # Включваме мача, ако има 1X2 сигурност или сигурност за голове/BTTS над 60%
                                     if win_home >= 60 or win_away >= 60 or btts_pct >= 60:
                                         raw_date = item['fixture']['date']
                                         match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
@@ -202,3 +200,5 @@ if st.session_state.matches:
                         try:
                             win_home = int(str(pred_data["predictions"]["percent"]["home"]).replace("%", ""))
                             win_away = int(str(pred_data["predictions"]["percent"]["away"]).replace("%", ""))
+                            win_draw = int(str(pred_data["predictions"]["percent"]["draw"]).replace("%", ""))
+                            advice = pred_data["predictions"].get("advice", "")
