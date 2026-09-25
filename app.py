@@ -27,7 +27,7 @@ def get_match_odds(fixture_id, _headers):
             if bookmakers:
                 bets = bookmakers[0].get("bets", [])
                 for bet in bets:
-                    if bet["id"] == 1: # Пазар 1X2
+                    if bet["id"] == 1:
                         return bet["values"]
     except:
         pass
@@ -77,7 +77,7 @@ def get_team_last_10_fixtures(team_id, _headers):
                     else: results.append("❌")
             
             avg_goals = total_goals / len(results) if results else 0
-            btts_rate = (btts_count / len(results)) * 100 if results else 0
+            btts_rate = (btts_count / len(results)) * 100 if len(results) > 0 else 0
             return {"form": results[:5], "win_rate": results.count("✅") * 10, "avg_goals": avg_goals, "btts_rate": btts_rate}
     except:
         pass
@@ -121,7 +121,7 @@ with col_btn2:
         today = datetime.now().strftime("%Y-%m-%d")
         url = f"https://{HOST}/fixtures?date={today}"
         
-        with st.spinner("🔍 Сканиране на тиража за мачове с висока сигурност..."):
+        with st.spinner("🔍 Сканиране на тиража..."):
             try:
                 response = requests.get(url, headers=headers)
                 data = response.json()
@@ -135,24 +135,26 @@ with col_btn2:
                             pred = get_ai_prediction(f_id, headers)
                             
                             if pred and "predictions" in pred:
+                                win_home = 0
+                                win_away = 0
+                                btts_pct = 0
+                                
                                 try:
                                     win_home = int(str(pred["predictions"]["percent"]["home"]).replace("%", ""))
                                     win_away = int(str(pred["predictions"]["percent"]["away"]).replace("%", ""))
-                                    
-                                    btts_pct = 0
                                     if "btts" in pred["predictions"] and pred["predictions"]["btts"]:
                                         btts_pct = int(str(pred["predictions"]["btts"]).replace("%", ""))
-                                    
-                                    if win_home >= 60 or win_away >= 60 or btts_pct >= 60:
-                                        raw_date = item['fixture']['date']
-                                        match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
-                                        max_pct = max(win_home, win_away, btts_pct)
-                                        
-                                        type_tag = "⚽ Знак" if max_pct in [win_home, win_away] else "🎯 Голове"
-                                        key = f"🔥 [{match_time}] {type_tag}: {max_pct}% | {item['teams']['home']['name']} - {item['teams']['away']['name']}"
-                                        high_sure_matches[key] = {"id": f_id, "home_id": item['teams']['home']['id'], "away_id": item['teams']['away']['id']}
                                 except:
                                     pass
+                                
+                                if win_home >= 60 or win_away >= 60 or btts_pct >= 60:
+                                    raw_date = item['fixture']['date']
+                                    match_time = datetime.fromisoformat(raw_date.replace("Z", "+00:00")).strftime("%H:%M")
+                                    max_pct = max(win_home, win_away, btts_pct)
+                                    
+                                    type_tag = "⚽ Знак" if max_pct in [win_home, win_away] else "🎯 Голове"
+                                    key = f"🔥 [{match_time}] {type_tag}: {max_pct}% | {item['teams']['home']['name']} - {item['teams']['away']['name']}"
+                                    high_sure_matches[key] = {"id": f_id, "home_id": item['teams']['home']['id'], "away_id": item['teams']['away']['id']}
                     
                     if high_sure_matches:
                         st.session_state.matches = high_sure_matches
