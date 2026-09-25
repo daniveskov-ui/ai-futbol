@@ -76,7 +76,7 @@ def get_team_last_10_fixtures(team_id, _headers):
                     elif goals_home == goals_away: results.append("🤝")
                     else: results.append("❌")
             
-            avg_goals = total_goals / len(results) if results else 0
+            avg_goals = total_goals / len(results) if len(results) > 0 else 0
             btts_rate = (btts_count / len(results)) * 100 if len(results) > 0 else 0
             return {"form": results[:5], "win_rate": results.count("✅") * 10, "avg_goals": avg_goals, "btts_rate": btts_rate}
     except:
