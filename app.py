@@ -13,7 +13,7 @@ st.set_page_config(
 st.title("⚽ AI Футбол Трейдър Pro")
 st.write("Елитни футболни прогнози и генератор на фишове")
 
-API_KEY = "c21f7bfd4414dea310f1262837a3074e"
+API_KEY = "ca61b57dd810980c1604d630c470309e"
 API_HOST = "v3.football.api-sports.io"
 
 @st.cache_data(ttl=86400)
