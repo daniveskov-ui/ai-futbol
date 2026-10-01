@@ -8,7 +8,7 @@ st.set_page_config(page_title="AI Футбол Трейдър - Автомати
 st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Автоматичен Дневен Тираж</h2>", unsafe_allow_html=True)
 st.write("Икономичен режим: Автоматично зареждане с точно 1 API заявка за деня. Без нужда от натискане на бутони.")
 
-API_KEY = "c21f7bfd4414dea310f1262837a3074e"
+API_KEY = "5e7733082a7ccd5b3960167e82c94007"
 API_HOST = "v3.football.api-sports.io"
 
 # Дълбоко кеширане за абсолютна защита на лимита (24 часа)
@@ -49,10 +49,10 @@ def run_local_ai_model(item):
         
         if is_cup or abs(total_delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
             goal_line = "Над 2.5 Гола"
-            goal_type = "OVER_25"
+            pred_type = "OVER_25"
         else:
             goal_line = "Под 2.5 Гола"
-            goal_type = "UNDER_25"
+            pred_type = "UNDER_25"
             
         if total_delta > 15:
             main_market = "1X"
@@ -64,9 +64,9 @@ def run_local_ai_model(item):
             main_market = "ГГ (Да)"
             pred_type = "GG"
             
-        return main_market, goal_line, ai_confidence, pred_type, goal_type
+        return main_market, goal_line, ai_confidence, pred_type
     except:
-        return "1X", "Над 1.5 Гола", 65, "HOME_WIN_OR_DRAW", "OVER_15"
+        return "1X", "Над 1.5 Гола", 65, "HOME_WIN_OR_DRAW"
 
 # Инициализиране на датите спрямо реалното време
 today_str = datetime.now().strftime('%Y-%m-%d')
@@ -125,7 +125,7 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                     
                     time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
                     
-                    main_market, goal_line, ai_confidence, pred_type, goal_type = run_local_ai_model(item)
+                    main_market, goal_line, ai_confidence, pred_type = run_local_ai_model(item)
                     
                     is_correct = "❌"
                     if pred_type == "HOME_WIN_OR_DRAW" and home_goals >= away_goals:
@@ -167,7 +167,7 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
 
 st.markdown("---")
 
-# --- АВТОМАТИЧНО ГЕНЕРИРАНЕ НА ДНЕШНИЯ ТИРАЖ (БЕЗ БУТОН) ---
+# --- АВТОМАТИЧНО ГЕНЕРИРАНЕ НА ДНЕШНИЯ ТИРАЖ ---
 if not fixtures:
     st.warning("🔄 Сървърът обновява днешния тираж. Превключване към резервна програма...")
     tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
@@ -191,7 +191,7 @@ else:
             away = item.get("teams", {}).get("away", {}).get("name", "Гост")
             league = item.get("league", {}).get("name", "Лига")
             
-            main_market, goal_line, ai_confidence, _, _ = run_local_ai_model(item)
+            main_market, goal_line, ai_confidence, _ = run_local_ai_model(item)
             
             full_schedule_list.append({
                 "Час 📅": time_str,
@@ -199,7 +199,7 @@ else:
                 "Първенство 🏆": league,
                 "Пазарен Консенсус 🎯": main_market,
                 "Линия Голове ⚽": goal_line,
-                "AI Сигурност (%)": ai_confidence
+                "Сигурност (%)": ai_confidence
             })
             
         if full_schedule_list:
@@ -207,17 +207,11 @@ else:
             df_schedule = df_schedule.sort_values(by="Час 📅", ascending=True).reset_index(drop=True)
             
             st.markdown(f"### 📋 Пълен хронологичен график на мачовете ({selected_country})")
-            st.dataframe(
-                df_schedule,
-                column_config={
-                    "AI Сигурност (%)": st.column_config.ProgressColumn("Сигурност", format="%d%%", min_value=0, max_value=100)
-                },
-                use_container_width=True,
-                hide_index=True
-            )
+            st.dataframe(df_schedule, use_container_width=True, hide_index=True)
             
             st.markdown("### 🏆 AI Селекция: Супер Сигурна Колонка за Деня")
-            df_top_5 = df_schedule.sort_values(by="AI Сигурност (%)", ascending=False).head(5).reset_index(drop=True)
+            df_top_5 = df_schedule.sort_values(by="Сигурност (%)", ascending=False).head(5).reset_index(drop=True)
             df_top_5["Очакван Коефициент"] = ["~1.42", "~1.35", "~1.31", "~1.26", "~1.21"][:len(df_top_5)]
             
-            st.dataframe(
+            st.dataframe(df_top_5[["Час 📅", "Мач 🏟️", "Пазарен Консенсус 🎯", "Линия Голове ⚽", "Очакван Коефициент"]], use_container_width=True, hide_index=True)
+            st.info("📊 **ОБЩ ОЧАКВАН КОЕФИЦИЕНТ НА СЕЛЕКЦИЯТА: ~ 3.96**")
