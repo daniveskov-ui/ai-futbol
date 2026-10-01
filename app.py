@@ -8,7 +8,7 @@ st.set_page_config(page_title="AI Футбол Трейдър - Прогрес �
 st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Пълен Тираж с Прогрес Барове</h2>", unsafe_allow_html=True)
 st.write("Икономичен режим: 1 заявка за целия ден. Пълен хронологичен тираж с индивидуални прогрес барове.")
 
-API_KEY = "5e7733082a7ccd5b3960167e82c94007"
+API_KEY = "c21f7bfd4414dea310f1262837a3074e"
 API_HOST = "v3.football.api-sports.io"
 
 # Дълбоко кеширане за абсолютна защита на лимита (24 часа)
