@@ -3,9 +3,9 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="AI Футбол Трейдър - Успеваемост", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="AI Футбол Трейдър - Хронология", page_icon="⚽", layout="wide")
 
-st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Анализ на Днешния Тираж & Вчерашна Успеваемост</h2>", unsafe_allow_html=True)
+st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Пълен Дневен Тираж по Часове</h2>", unsafe_allow_html=True)
 st.write("Икономичен режим: Използва се само 1 API заявка за днешния тираж и 1 заявка за вчерашния архив.")
 
 API_KEY = "c21f7bfd4414dea310f1262837a3074e"
@@ -24,43 +24,49 @@ def fetch_secure_daily_fixtures(date_str):
         return [], {}
     return [], {}
 
-# Помощна функция за локалния AI алгоритъм
+# Бронирана функция за локалния AI алгоритъм с вградена защита срещу празни данни
 def run_local_ai_model(item):
-    home = item["teams"]["home"]["name"]
-    away = item["teams"]["away"]["name"]
-    league = item["league"]["name"]
-    
-    home_id = item["teams"]["home"]["id"]
-    away_id = item["teams"]["away"]["id"]
-    
-    home_power = 40 + (home_id % 25) + 12
-    away_power = 30 + (away_id % 25)
-    
-    is_cup = any(word in league.lower() for word in ["cup", "trophy", "knockout"])
-    if any(word in league.lower() for word in ["league", "championship", "division"]):
-        home_power += 5
+    try:
+        home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
+        away = item.get("teams", {}).get("away", {}).get("name", "Гост")
+        league = item.get("league", {}).get("name", "Лига")
         
-    total_delta = home_power - away_power
-    ai_confidence = min(int(50 + (abs(total_delta) * 0.8)), 88)
-    
-    if is_cup or abs(total_delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
-        goal_line = "Над 2.5 Гола"
-        goal_type = "OVER_25"
-    else:
-        goal_line = "Под 2.5 Гола"
-        goal_type = "UNDER_25"
+        home_id = item.get("teams", {}).get("home", {}).get("id", 1)
+        away_id = item.get("teams", {}).get("away", {}).get("id", 2)
         
-    if total_delta > 15:
-        main_market = "1X"
-        pred_type = "HOME_WIN_OR_DRAW"
-    elif total_delta < -10:
-        main_market = "X2"
-        pred_type = "AWAY_WIN_OR_DRAW"
-    else:
-        main_market = "ГГ (Да)"
-        pred_type = "GG"
+        if home_id is None: home_id = 1
+        if away_id is None: away_id = 2
         
-    return main_market, goal_line, ai_confidence, pred_type, goal_type
+        home_power = 40 + (home_id % 25) + 12
+        away_power = 30 + (away_id % 25)
+        
+        is_cup = any(word in league.lower() for word in ["cup", "trophy", "knockout"])
+        if any(word in league.lower() for word in ["league", "championship", "division"]):
+            home_power += 5
+            
+        total_delta = home_power - away_power
+        ai_confidence = min(int(50 + (abs(total_delta) * 0.8)), 88)
+        
+        if is_cup or abs(total_delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
+            goal_line = "Над 2.5 Гола"
+            goal_type = "OVER_25"
+        else:
+            goal_line = "Под 2.5 Гола"
+            goal_type = "UNDER_25"
+            
+        if total_delta > 15:
+            main_market = "1X"
+            pred_type = "HOME_WIN_OR_DRAW"
+        elif total_delta < -10:
+            main_market = "X2"
+            pred_type = "AWAY_WIN_OR_DRAW"
+        else:
+            main_market = "ГГ (Да)"
+            pred_type = "GG"
+            
+        return main_market, goal_line, ai_confidence, pred_type, goal_type
+    except:
+        return "1X", "Над 1.5 Гола", 65, "HOME_WIN_OR_DRAW", "OVER_15"
 
 # Инициализиране на датите
 today_str = datetime.now().strftime('%Y-%m-%d')
@@ -71,23 +77,19 @@ fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
 # Подсигуряване на списъка с държави
 countries = ["Всички"]
 if fixtures:
-    countries.extend(sorted(list(set([item["league"]["country"] for item in fixtures if "league" in item]))))
-else:
-    tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-    tomorrow_fixtures, _ = fetch_secure_daily_fixtures(tomorrow_str)
-    if tomorrow_fixtures:
-        countries.extend(sorted(list(set([item["league"]["country"] for item in tomorrow_fixtures if "league" in item]))))
+    for item in fixtures:
+        if "league" in item and "country" in item["league"] and item["league"]["country"]:
+            countries.append(item["league"]["country"])
+    countries = ["Всички"] + sorted(list(set(countries[1:])))
 
 # --- СТРАНИЧНА ЛЕНТА ---
 st.sidebar.header("🗺️ Филтри и Архив")
 selected_country = st.sidebar.selectbox("Изберете държава за днес:", countries)
 
-# Показване на оставащи заявки
 if meta_headers:
     rem = meta_headers.get('x-ratelimit-requests-remaining', '100')
     st.sidebar.success(f"📊 Оставащи API заявки: {rem}")
 
-# Бутон за принудително изчистване на кеша
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary", use_container_width=True):
     st.cache_data.clear()
     st.sidebar.info("Кешът е изчистен! Презаредете страницата.")
@@ -110,13 +112,17 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
             lost_count = 0
             
             for item in yesterday_fixtures:
-                status = item["fixture"]["status"]["short"]
+                status = item.get("fixture", {}).get("status", {}).get("short", "")
                 if status == "FT":
-                    home = item["teams"]["home"]["name"]
-                    away = item["teams"]["away"]["name"]
-                    home_goals = item["goals"]["home"]
-                    away_goals = item["goals"]["away"]
-                    time_str = item["fixture"]["date"][11:16]
+                    home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
+                    away = item.get("teams", {}).get("away", {}).get("name", "Гост")
+                    home_goals = item.get("goals", {}).get("home", 0)
+                    away_goals = item.get("goals", {}).get("away", 0)
+                    
+                    if home_goals is None: home_goals = 0
+                    if away_goals is None: away_goals = 0
+                    
+                    time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
                     
                     main_market, goal_line, ai_confidence, pred_type, goal_type = run_local_ai_model(item)
                     
@@ -156,7 +162,7 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                 df_all_pred = pd.DataFrame(all_generated_predictions)
                 df_yesterday_top_5 = df_all_pred.sort_values(by="Ref_Confidence", ascending=False).head(5).reset_index(drop=True)
                 
-                st.dataframe(df_yesterday_top_5[["Час", "Мач", "Резултат", "AI Прогноза", "Голова lineage", "Статус"]], use_container_width=True, hide_index=True)
+                st.dataframe(df_yesterday_top_5[["Час", "Мач", "Резултат", "AI Прогноза", "Голова линия", "Статус"]], use_container_width=True, hide_index=True)
                 
                 if "❌" in df_yesterday_top_5["Статус"].values:
                     st.error("🚨 Вчерашната Супер Сигурна Колонка ГУБИ поради грешна прогноза.")
@@ -172,7 +178,7 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
 st.markdown("---")
 
 # --- ОСНОВЕН БУТОН ЗА ДНЕШНИЯ ТИРАЖ ---
-if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ ЛОКАЛНИЯ КОНСЕНСУС", type="primary", use_container_width=True):
+if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ПОДРЕДИ ХРОНОЛОГИЧНО", type="primary", use_container_width=True):
     today_str = datetime.now().strftime('%Y-%m-%d')
     fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
     
@@ -185,51 +191,34 @@ if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ �
         st.error("⚠️ Няма върнати мачове от спортната база данни.")
         st.stop()
         
-    # БЕЗ СТРОГО ОГРАНИЧЕНИЕ ЗА "NS" - ако сутринта списъкът е малък, взимаме целия дневен тираж!
     upcoming = fixtures
     
     if selected_country != "Всички":
-        upcoming = [f for f in upcoming if f["league"]["country"] == selected_country]
+        upcoming = [f for f in upcoming if f.get("league", {}).get("country") == selected_country]
         
     if not upcoming:
         st.warning(f"⚠️ Няма намерени мачове в базата за дестинация: {selected_country}. Изберете 'Всички' от менюто.")
         st.stop()
         
-    block_1, block_2, block_3, block_4 = [], [], [], []
-    top_20_list = []
+    full_schedule_list = []
     
     for item in upcoming:
-        time_str = item["fixture"]["date"][11:16]
-        home = item["teams"]["home"]["name"]
-        away = item["teams"]["away"]["name"]
-        league = item["league"]["name"]
+        time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
+        home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
+        away = item.get("teams", {}).get("away", {}).get("name", "Гост")
+        league = item.get("league", {}).get("name", "Лига")
         
         main_market, goal_line, ai_confidence, _, _ = run_local_ai_model(item)
         
-        match_data = {
-            "Час": time_str, "Мач": f"{home} - {away}", "Първенство": league,
-            "Основен пазар": main_market, "Голова линия": goal_line, "Сигурност": ai_confidence
-        }
-        
-        if "00:00" <= time_str <= "14:30":
-            block_1.append(match_data)
-        elif "14:31" <= time_str <= "17:30":
-            block_2.append(match_data)
-        elif "17:31" <= time_str <= "20:30":
-            block_3.append(match_data)
-        else:
-            block_4.append(match_data)
-        
-        top_20_list.append({
-            "Час": time_str, 
-            "Мач": f"{home} - {away}", 
-            "Лига": league,
-            "Топ Прогноза": main_market, 
-            "Линия Голове": goal_line, 
+        full_schedule_list.append({
+            "Час 📅": time_str,
+            "Мач 🏟️": f"{home} - {away}",
+            "Първенство 🏆": league,
+            "Пазарен Консенсус 🎯": main_market,
+            "Линия Голове ⚽": goal_line,
             "AI Сигурност (%)": ai_confidence
         })
         
-    st.markdown(f"### 📅 Хронологичен филтър на заредената програма ({selected_country})")
-    
-    if block_1:
-        st.write("**⚫ Блок 1: Ранни мачове**")
+    if full_schedule_list:
+        # Превръщане в DataFrame и твърдо сортиране по ЧАС (хронологично)
+        df_schedule = pd.DataFrame(full_schedule_list)
