@@ -111,7 +111,7 @@ def run_granular_local_ai(item):
             cards, cards_p = "Под 4.5", min(68 + (away_id % 15), 86)
             card_odd = round(1.65 + (away_id % 3) / 10, 2)
         
-        return sign, sign_p, odd_val, ht_sign, ht_p, ht_odd, goals, goals_p, g_odd, corners, corners_p, c_odd, cards, cards_p, card_odd
+        return sign, sign_p, odd_val, ht_sign, ht_p, ht_odd, goals, goals_p, g_odd, corners, corners_p, c_odd forest, cards, cards_p, card_odd
     except:
         return "1", 60, 1.45, "Х (РП)", 65, 1.90, "Под 2.5", 65, 1.75, "Под 9.5", 60, 1.80, "Под 4.5", 60, 1.70
 
