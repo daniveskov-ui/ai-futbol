@@ -184,7 +184,7 @@ if selected_country != "Всички":
 
 # --- ГЕНЕРИРАНЕ НА ФИШ (АКО Е НАТИСНАТ БУТОНА) ---
 if generate_ticket:
-    # Избираме топ 3 мача с най-висока сигурност
+    # Избираме топ 3 мача с най-висока сигурност от филтрираната или цялата база данни
     top_picks = full_df.sort_values(by="Сигурност % 📈", ascending=False).head(3)
     
     if not top_picks.empty:
@@ -206,9 +206,7 @@ if generate_ticket:
 # --- ИЗВЕЖДАНЕ НА ТАБЛИЦАТА С ЦВЕТНО КОДИРАНЕ ---
 st.markdown(f"### 📋 Световен дневен тираж (Намерени: {len(filtered_df)} мача)")
 
-# Функция за оцветяване на редове с висока сигурност (Над 80%)
-def highlight_high_confidence(row):
-    if row["Сигурност % 📈"] >= 80:
-        return ['background-color: #D1FAE5; color: #065F46'] * len(row)
-    return [''] * len(row)
+# Задължително нулираме индекса тук, за да съвпада перфектно с вътрешните индекси на Styler обекта
+filtered_df = filtered_df.reset_index(drop=True)
 
+# Функция за оцветяване на редове с висока сигурност (Над 80%) въз основа на новите чисти индекси
