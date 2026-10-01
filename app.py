@@ -8,7 +8,7 @@ st.set_page_config(page_title="AI Футбол Трейдър - Успеваем
 st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Анализ на Днешния Тираж & Вчерашна Успеваемост</h2>", unsafe_allow_html=True)
 st.write("Икономичен режим: Използва се само 1 API заявка за днешния тираж и 1 заявка за вчерашния архив.")
 
-API_KEY = "7a960553a4c31c4a926bc3dcb675e0da"
+API_KEY = "c21f7bfd4414dea310f1262837a3074e"
 API_HOST = "v3.football.api-sports.io"
 
 # Дълбоко кеширане за защита на лимита (24 часа)
