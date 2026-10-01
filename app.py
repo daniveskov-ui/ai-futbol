@@ -167,7 +167,7 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                 df_past_print = pd.DataFrame(past_results).drop(columns=["Ref_Confidence"])
                 st.dataframe(df_past_print.head(30), use_container_width=True, hide_index=True)
             else:
-                st.info("Вчерашните мачове още не са актуализирани в базата данни.")
+                st.info("Вчерашните мачове още не са актуализирани in базата данни.")
 
 st.markdown("---")
 
@@ -224,12 +224,13 @@ if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ �
             "Час": time_str, 
             "Мач": f"{home} - {away}", 
             "Лига": league,
-            "Топ Прогноза": main_market, 
+            "Tоп Прогноза": main_market, 
             "Линия Голове": goal_line, 
             "AI Сигурност (%)": ai_confidence
         })
         
     st.markdown(f"### 📅 Хронологичен филтър на заредената програма ({selected_country})")
     
-    time_blocks_config = [
-        ("Блок 1: Ранни (11:30 - 14:30)", block_1),
+    # Секция Блок 1
+    if block_1:
+        st.write("**⚫ Блок 1: Ранни (11:30 - 14:30)**")
