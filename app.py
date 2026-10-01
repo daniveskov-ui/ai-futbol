@@ -167,8 +167,7 @@ if st.sidebar.button("📊 ЗАГРЕДИ ВЧЕРАШНА УСПЕВАЕМОС�
 
 st.markdown("---")
 
-# 🛡️ АБСОЛЮТЕН FALLBACK: Ако сървърът на API-то е напълно празен в момента,
-# софтуерът сам активира готов тираж с топ реални европейски събития за деня!
+# Резервен тираж при празен сървър
 if not fixtures or len(fixtures) == 0:
     fixtures = [
         {"fixture": {"date": "2026-10-01T16:00:00+00:00"}, "teams": {"home": {"name": "Arsenal", "id": 42}, "away": {"name": "Chelsea", "id": 49}}, "league": {"name": "Premier League", "country": "England"}},
@@ -191,6 +190,9 @@ for item in upcoming:
     
     sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
     
-    full_schedule.append({
-        "Час 📅": time_str, 
-        "Държава 🗺️": country,
+    # ЛИНЕЙНО ПЪЛНЕНЕ НА МАСИВА - 100% БЕЗОПАСНО БЕЗ ВЛОЖЕНИ РЕЧНИЦИ
+    row_data = [
+        time_str,
+        country,
+        f"{home} - {away}",
+        f"{sign} ({sign_o}) [{sign_p}%]",
