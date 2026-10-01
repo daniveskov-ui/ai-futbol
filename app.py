@@ -137,7 +137,7 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                         "Резултат": f"{home_goals}:{away_goals}",
                         "AI Прогноза": main_market,
                         "Голова линия": goal_line,
-                        "Сигурност (%)": ai_confidence,
+                        "Ref_Confidence": ai_confidence,
                         "Статус": is_correct
                     }
                     past_results.append(match_summary)
@@ -154,7 +154,7 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                 
                 st.markdown("### 🏆 Проверка на вчерашния Топ Акумулатор")
                 df_all_pred = pd.DataFrame(all_generated_predictions)
-                df_yesterday_top_5 = df_all_pred.sort_values(by="Сигурност (%)", ascending=False).head(5).reset_index(drop=True)
+                df_yesterday_top_5 = df_all_pred.sort_values(by="Ref_Confidence", ascending=False).head(5).reset_index(drop=True)
                 
                 st.dataframe(df_yesterday_top_5[["Час", "Мач", "Резултат", "AI Прогноза", "Голова линия", "Статус"]], use_container_width=True, hide_index=True)
                 
@@ -164,7 +164,8 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                     st.success("🎉 Вчерашната Супер Сигурна Колонка ПЕЧЕЛИ изцяло!")
                 
                 st.markdown("### 📋 Пълен отчет на вчерашните прогнози")
-                st.dataframe(pd.DataFrame(past_results).head(30), use_container_width=True, hide_index=True)
+                df_past_print = pd.DataFrame(past_results).drop(columns=["Ref_Confidence"])
+                st.dataframe(df_past_print.head(30), use_container_width=True, hide_index=True)
             else:
                 st.info("Вчерашните мачове още не са актуализирани в базата данни.")
 
@@ -210,10 +211,14 @@ if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ �
             "Основен пазар": main_market, "Голова линия": goal_line, "Сигурност": ai_confidence
         }
         
-        if "11:30" <= time_str <= "14:30": block_1.append(match_data)
-        elif "14:31" <= time_str <= "17:30": block_2.append(match_data)
-        elif "17:31" <= time_str <= "20:30": block_3.append(match_data)
-        else: block_4.append(match_data)
+        if "11:30" <= time_str <= "14:30":
+            block_1.append(match_data)
+        elif "14:31" <= time_str <= "17:30":
+            block_2.append(match_data)
+        elif "17:31" <= time_str <= "20:30":
+            block_3.append(match_data)
+        else:
+            block_4.append(match_data)
         
         top_20_list.append({
             "Час": time_str, 
@@ -225,5 +230,6 @@ if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ �
         })
         
     st.markdown(f"### 📅 Хронологичен филтър на заредената програма ({selected_country})")
-    for name, block in [("Блок 1: Ранни (11:30 - 14:30)", block_1), ("Блок 2: Следобедни (14:30 - 17:30)", block_2), ("Блок 3: Вечерни (17:30 - 20:30)", block_3), ("Блок 4: Късни (20:30 - Край)", block_4)]:
-        if block:
+    
+    time_blocks_config = [
+        ("Блок 1: Ранни (11:30 - 14:30)", block_1),
