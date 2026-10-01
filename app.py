@@ -11,7 +11,7 @@ st.write("Икономичен режим: 1 заявка за деня. Авт�
 API_KEY = "c21f7bfd4414dea310f1262837a3074e"
 API_HOST = "v3.football.api-sports.io"
 
-# Дълбоко кеширане за абсолютна защита на лимита (24 часа)
+# Дълбоко кеширане за абсолютна защита на лимита (24 часа) с диагностика на грешки
 @st.cache_data(ttl=86400)
 def fetch_secure_daily_fixtures(date_str):
     url = f"https://{API_HOST}/fixtures?date={date_str}"
@@ -19,10 +19,20 @@ def fetch_secure_daily_fixtures(date_str):
     try:
         res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
-            return res.json().get("response", []), res.headers
-    except:
+            data = res.json()
+            
+            # Проверка за вътрешни грешки в API (например изтекъл лимит или грешен ключ)
+            if data.get("errors"):
+                st.error(f"🚨 Грешка, върната от спортното API: {data.get('errors')}")
+                return [], res.headers
+                
+            return data.get("response", []), res.headers
+        else:
+            st.error(f"🚨 Сървърна грешка от API доставчика. Статус код: {res.status_code}")
+            return [], {}
+    except Exception as e:
+        st.error(f"🚨 Проблем с интернет връзката или API заявката: {e}")
         return [], {}
-    return [], {}
 
 # Бронирана функция за локалния AI алгоритъм с вградена защита срещу празни данни
 def run_granular_local_ai(item):
@@ -110,7 +120,7 @@ if meta_headers:
 
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary", use_container_width=True):
     st.cache_data.clear()
-    st.sidebar.info("Кешът е изчистен! Презаредете страницата.")
+    st.sidebar.info("Кешът е изчистен! Презаредете страницата, за да изпратите нова заявка.")
 
 # --- ВЧЕРАШНА УСПЕВАЕМОСТ ---
 st.sidebar.markdown("---")
@@ -120,7 +130,7 @@ if st.sidebar.button("📊 ЗАГРЕДИ ВЧЕРАШНА УСПЕВАЕМОС�
     with st.spinner("⏳ Проверка на вчерашния архив..."):
         yesterday_fixtures, _ = fetch_secure_daily_fixtures(yesterday_str)
         if not yesterday_fixtures:
-            st.warning("⚠️ Няма налични данни за вчерашния архив.")
+            st.sidebar.warning("⚠️ Няма налични данни за вчерашния архив.")
         else:
             past_results = []
             for item in yesterday_fixtures:
@@ -147,12 +157,14 @@ if st.sidebar.button("📊 ЗАГРЕДИ ВЧЕРАШНА УСПЕВАЕМОС�
                     })
             if past_results:
                 st.dataframe(pd.DataFrame(past_results).head(20), use_container_width=True, hide_index=True)
+            else:
+                st.warning("Вчерашните мачове още не са завършили или липсват крайни резултати.")
 
 st.markdown("---")
 
 # --- АВТОМАТИЧНО ЗАРЕЖДАНЕ НА АБСОЛЮТНО ВСИЧКИ МАЧОВЕ НАВЕДНЪЖ ---
 if not fixtures:
-    st.error("⚠️ Няма върнати мачове от спортната база данни. Моля, опитайте да изчистите кеша.")
+    st.error("⚠️ Няма върнати мачове от спортната база данни. Моля, проверете диагностичните съобщения по-горе или опитайте да изчистите кеша.")
 else:
     upcoming = fixtures
     
@@ -175,29 +187,33 @@ else:
             "1-во Пол. ⏱️": f"{ht_sign} ({ht_o}) [Сиг: {ht_p}%]",
             "Голове ⚽": f"{goals} ({g_o}) [Сиг: {goals_p}%]",
             "Корнери 📐": f"{corners} ({c_o}) [Сиг: {corners_p}%]",
-            "Картони 🟨": f"{cards} ({card_o}) [Сиг: {cards_p}%]"
+            "Картони 🟨": f"{cards} ({card_o}) [Сиг: {cards_p}%]",
+            "Сигурност": sign_p  # Скрито служебно поле за филтрация
         })
         
-        match_name = f"{home} - {away}"
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Краен Знак", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": sign_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "1-во Полувреме", "Прогноза": ht_sign, "Коефициент": ht_o, "Сигурност": ht_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Голове", "Прогноза": goals, "Коефициент": g_o, "Сигурност": goals_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Корнери", "Прогноза": corners, "Коефициент": c_o, "Сигурност": corners_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Картони", "Прогноза": cards, "Коефициент": card_o, "Сигурност": cards_p})
+        # Запис в пула за фишове
+        pool_for_combo.append({
+            "Мач": f"{home} - {away}", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": sign_p
+        })
 
-    if full_schedule:
-        df_schedule = pd.DataFrame(full_schedule).sort_values(by="Час 📅", ascending=True).reset_index(drop=True)
-        
-        st.markdown("### 📋 Хронологичен световен дневен тираж с пазарен консенсус")
-        st.dataframe(df_schedule, use_container_width=True, hide_index=True)
-        
-        st.markdown("### 🏆 AI Селекция: Супер Сигурна Колонка (ТОП 5 Прогнози за Дня)")
-        df_pool = pd.DataFrame(pool_for_combo)
-        df_pool = df_pool.sort_values(by="Сигурност", ascending=False).drop_duplicates(subset=["Мач"]).head(5).reset_index(drop=True)
-        
-        for idx, row in df_pool.iterrows():
-            m_text = f"🏟️ **{row['Мач']}** | Пазар: *{row['Пазар']}* -> **{row['Прогноза']}** [Коеф: {row['Коефициент']}]"
-            st.write(m_text)
-            st.progress(int(row['Сигурност']))
-            
-        total_odds = round(df_pool["Коефициент"].prod(), 2)
+    df = pd.DataFrame(full_schedule)
+    df = df.sort_values(by="Час 📅")
+
+    # --- СТАТИСТИКА ЗА ДЕНЯ ---
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("🗺️ Общо мачове в тиража", len(df))
+    with col2:
+        st.metric("🎯 Препоръчан пазар", "Първо Полувреме (РП)")
+    with col3:
+        st.metric("⚡ Икономия на ресурси", "100% (Кеширан тираж)")
+
+    # --- ФИЛТРИ И ТЪРСЕНЕ ---
+    st.markdown("### 🔍 Бързо търсене и филтриране")
+    search_col1, search_col2 = st.columns(2)
+    with search_col1:
+        search_query = st.text_input("🔍 Търси отбор или държава:", "").lower()
+    with search_col2:
+        min_confidence = st.slider("🎯 Минимална сигурност на знака (%):", 60, 95, 60)
+
+    # Прилагане на филтри
