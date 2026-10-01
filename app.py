@@ -191,7 +191,7 @@ for item in upcoming:
     sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
     
     # ЛИНЕЙНО ПЪЛНЕНЕ НА МАСИВА - 100% БЕЗОПАСНО БЕЗ ВЛОЖЕНИ РЕЧНИЦИ
-    row_data = [
+    full_schedule.append([
         time_str,
         country,
         f"{home} - {away}",
