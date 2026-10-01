@@ -115,8 +115,9 @@ def run_granular_local_ai(item):
     except:
         return "1", 60, 1.45, "Х (РП)", 65, 1.90, "Под 2.5", 65, 1.75, "Под 9.5", 60, 1.80, "Под 4.5", 60, 1.70
 
-today_str = datetime.now().strftime('%Y-%m-%d')
-fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
+# СВЕЖ ТИРАЖ: Настройваме автоматично извличане на утрешната пълна програма
+target_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+fixtures, meta_headers = fetch_secure_daily_fixtures(target_date)
 
 st.sidebar.header("📊 Управление")
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ", type="primary", use_container_width=True):
@@ -124,12 +125,11 @@ if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ", type="primary", use_container
 
 if not fixtures or len(fixtures) == 0:
     fixtures = [
-        {"fixture": {"date": "2026-10-01T16:00:00+00:00"}, "teams": {"home": {"name": "Arsenal", "id": 42}, "away": {"name": "Chelsea", "id": 49}}, "league": {"name": "Premier League", "country": "England"}},
-        {"fixture": {"date": "2026-10-01T17:30:00+00:00"}, "teams": {"home": {"name": "Real Madrid", "id": 541}, "away": {"name": "Barcelona", "id": 529}}, "league": {"name": "La Liga", "country": "Spain"}},
-        {"fixture": {"date": "2026-10-01T19:45:00+00:00"}, "teams": {"home": {"name": "Bayern Munich", "id": 157}, "away": {"name": "Dortmund", "id": 165}}, "league": {"name": "Bundesliga", "country": "Germany"}},
+        {"fixture": {"date": "2026-10-02T18:45:00+00:00"}, "teams": {"home": {"name": "Leverkusen", "id": 161}, "away": {"name": "Stuttgart", "id": 159}}, "league": {"name": "Bundesliga", "country": "Germany"}},
+        {"fixture": {"date": "2026-10-02T19:00:00+00:00"}, "teams": {"home": {"name": "PSG", "id": 85}, "away": {"name": "Rennes", "id": 94}}, "league": {"name": "Ligue 1", "country": "France"}},
+        {"fixture": {"date": "2026-10-02T20:00:00+00:00"}, "teams": {"home": {"name": "Athletic Bilbao", "id": 531}, "away": {"name": "Sevilla", "id": 536}}, "league": {"name": "La Liga", "country": "Spain"}},
     ]
 
-# СЪЗДАВАМЕ ПРАЗНИ СПИСЪЦИ ЗА СЕКЦИИТЕ
 c_час, c_лига, c_мач, c_знак, c_рп, c_гол, c_корн, c_карт = [], [], [], [] ,[], [], [], []
 
 for item in fixtures:
@@ -140,7 +140,6 @@ for item in fixtures:
     
     s, sp, so, ht, htp, hto, g, gp, go, c, cp, co, cr, crp, cro = run_granular_local_ai(item)
     
-    # ПЪЛНИМ ВСЯКА КОЛОНА ПООТДЕЛНО - РЕДОВЕТЕ СА МАКСИМАЛНО КЪСИ И ЗАЩИТЕНИ
     c_час.append(time_val)
     c_лига.append(country)
     c_мач.append(f"{h_team} - {a_team}")
@@ -150,7 +149,6 @@ for item in fixtures:
     c_корн.append(f"{c} ({co}) [{cp}%]")
     c_карт.append(f"{cr} ({cro}) [{crp}%]")
 
-# СГЛОБЯВАМЕ КРАЙНАТА ТАБЛИЦА БЕЗ НИТО ЕДНА СКОБА В ЦИКЪЛА
 df = pd.DataFrame()
 df["Час 📅"] = c_час
 df["Държава 🗺️"] = c_лига
