@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 st.set_page_config(page_title="AI Футбол Трейдър - Прогрес Барове", page_icon="⚽", layout="wide")
 
 st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Пълен Тираж с Прогрес Барове</h2>", unsafe_allow_html=True)
-st.write("Икономичен режим: 1 заявка за целия ден. Пълен хронологичен тираж с реални пазарни коефициенти и прогрес барове.")
+st.write("Икономичен режим: 1 заявка за целия ден. Реални пазарни коефициенти и прогрес барове.")
 
 API_KEY = "c21f7bfd4414dea310f1262837a3074e"
 API_HOST = "v3.football.api-sports.io"
@@ -24,7 +24,7 @@ def fetch_secure_daily_fixtures(date_str):
         return [], {}
     return [], {}
 
-# КОРИГИРАН ЛОКАЛЕН AI МОДЕЛ (Застрахован срещу размяна на коефициенти)
+# Бронирана функция за локалния AI алгоритъм с вградена защита срещу празни данни
 def run_granular_local_ai(item):
     try:
         home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
@@ -205,6 +205,6 @@ else:
             
             full_schedule.append({
                 "Час 📅": time_str, "Мач 🏟️": f"{home} - {away}",
-                "Знак": f"{sign} ({sign_o})", "Знак Сиг.": sign_p,
-                "1-во Пол.": f"{ht_sign} ({ht_o})", "РП Сиг.": ht_p,
-                "Голове": f"{goals} ({g_o})", "Гол Сиг.": goals_p,
+                "Знак": f"{sign} ({sign_o})", "Знак Сиг. %": sign_p,
+                "1-во Пол.": f"{ht_sign} ({ht_o})", "РП Сиг. %": ht_p,
+                "Голове": f"{goals} ({g_o})", "Гол Сиг. %": goals_p,
