@@ -36,7 +36,6 @@ def run_granular_local_ai(item):
         if home_id is None: home_id = 1
         if away_id is None: away_id = 2
         
-        # Математически модел за изчисляване на силата на отборите (Локален Elo симулатор)
         home_power = 40 + (home_id % 25) + 12
         away_power = 30 + (away_id % 25)
         
@@ -45,40 +44,59 @@ def run_granular_local_ai(item):
             home_power += 5
         delta = home_power - away_power
         
-        # 1. Пазар: Твърд знак и Реални Коефициенти
-        if delta > 16: 
-            sign = "1"
-            sign_p = min(75 + (home_id % 12), 92)
-            odd_val = round(1.35 + (home_id % 5) / 10, 2)
-        elif delta < -12: 
-            sign = "2"
-            sign_p = min(72 + (away_id % 12), 90)
-            odd_val = round(1.40 + (away_id % 5) / 10, 2)
-        else: 
-            sign = "Х"
-            sign_p = min(60 + (home_id % 15), 78)
-            odd_val = round(2.90 + (home_id % 5) / 10, 2)
+        odds_data = item.get("odds", [])
+        live_odds = {"Home": None, "Draw": None, "Away": None}
         
-        # 2. Пазар: Първо Полувреме (РП 1Х2)
-        if sign == "1" and delta > 22: 
+        if odds_data and isinstance(odds_data, list):
+            for bookmaker in odds_data:
+                for bet in bookmaker.get("bets", []):
+                    if bet.get("name") == "Match Winner":
+                        for value in bet.get("values", []):
+                            val_name = value.get("value")
+                            if val_name in ["Home", "1", home]:
+                                live_odds["Home"] = float(value.get("odd", 1.0))
+                            elif val_name in ["Away", "2", away]:
+                                live_odds["Away"] = float(value.get("odd", 1.0))
+                            elif val_name in ["Draw", "X"]:
+                                live_odds["Draw"] = float(value.get("odd", 1.0))
+
+        odd_home = live_odds["Home"] if live_odds["Home"] else round(2.10 + (home_id % 5) / 10, 2)
+        odd_away = live_odds["Away"] if live_odds["Away"] else round(2.30 + (away_id % 5) / 10, 2)
+        odd_draw = live_odds["Draw"] if live_odds["Draw"] else round(3.10 + (home_id % 5) / 10, 2)
+
+        if odd_home < odd_away:
+            sign = "1"
+            odd_val = odd_home
+            sign_p = min(75 + (home_id % 12), 92)
+            if sign_p < 58: sign_p = 58
+        else:
+            sign = "2"
+            odd_val = odd_away
+            sign_p = min(72 + (away_id % 12), 90)
+            if sign_p < 56: sign_p = 56
+
+        if abs(odd_home - odd_away) < 0.15:
+            sign = "Х"
+            odd_val = odd_draw
+            sign_p = min(60 + (home_id % 15), 75)
+
+        if sign == "1" and odd_home < 1.70: 
             ht_sign, ht_p = "1 (РП)", min(sign_p - 5, 85)
-            ht_odd = round(odd_val * 1.35, 2)
-        elif sign == "2" and delta < -18: 
+            ht_odd = round(odd_home * 1.35, 2)
+        elif sign == "2" and odd_away < 1.70: 
             ht_sign, ht_p = "2 (РП)", min(sign_p - 5, 83)
-            ht_odd = round(odd_val * 1.35, 2)
+            ht_odd = round(odd_away * 1.35, 2)
         else: 
             ht_sign, ht_p = "Х (РП)", min(74 + (home_id % 12), 89)
             ht_odd = round(1.85 + (home_id % 4) / 10, 2)
         
-        # 3. Пазар: Голове Над/Под 2.5
-        if abs(delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
-            goals, goals_p = "Над 2.5", min(70 + (home_id % 14), 89)
+        if odd_val < 1.60 or "scotland" in league.lower() or "iceland" in league.lower():
+            goals, goals_p = "Над 2.5", min(72 + (home_id % 12), 89)
             g_odd = round(1.65 + (home_id % 3) / 10, 2)
         else: 
             goals, goals_p = "Под 2.5", min(72 + (away_id % 14), 91)
             g_odd = round(1.70 + (away_id % 3) / 10, 2)
         
-        # 4. Пазар: Корнери
         if goals == "Над 2.5" or any(w in league.lower() for w in ["england", "scotland", "japan"]):
             corners, corners_p = "Над 9.5", min(68 + (home_id % 15), 88)
             c_odd = round(1.80 + (home_id % 3) / 10, 2)
@@ -86,7 +104,6 @@ def run_granular_local_ai(item):
             corners, corners_p = "Под 9.5", min(70 + (away_id % 13), 87)
             c_odd = round(1.75 + (away_id % 3) / 10, 2)
         
-        # 5. Пазар: Картони
         if sign == "Х" or any(w in league.lower() for w in ["spain", "italy", "brazil"]):
             cards, cards_p = "Над 4.5", min(72 + (home_id % 14), 90)
             card_odd = round(1.90 + (home_id % 3) / 10, 2)
@@ -167,7 +184,6 @@ else:
         
         sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
         
-        # Извеждаме процентите като чист текст в голямата таблица - 100% стабилно срещу срив!
         full_schedule.append({
             "Час 📅": time_str, 
             "Държава 🗺️": country,
@@ -180,24 +196,10 @@ else:
         })
         
         match_name = f"{home} - {away}"
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Краен Знак", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": sign_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "1-во Полувреме", "Прогноза": ht_sign, "Коефициент": ht_o, "Сигурност": ht_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Голове", "Прогноза": goals, "Коефициент": g_o, "Сигурност": goals_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Корнери", "Прогноза": corners, "Коефициент": c_o, "Сигурност": corners_p})
-        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Картони", "Прогноза": cards, "Коефициент": card_o, "Сигурност": cards_p})
+        pool_for_combo.append({"Мач": match_name, "Пазар": "Краен Знак", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": int(sign_p)})
+        pool_for_combo.append({"Мач": match_name, "Пазар": "1-во Полувреме", "Прогноза": ht_sign, "Коефициент": ht_o, "Сигурност": int(ht_p)})
+        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Голове", "Прогноза": goals, "Коефициент": g_o, "Сигурност": int(goals_p)})
+        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Корнери", "Прогноза": corners, "Коефициент": c_o, "Сигурност": int(corners_p)})
+        pool_for_combo.append({"Мач": match_name, "Пазар": "Линия Картони", "Прогноза": cards, "Коефициент": card_o, "Сигурност": int(cards_p)})
 
     if full_schedule:
-        df_schedule = pd.DataFrame(full_schedule).sort_values(by="Час 📅", ascending=True).reset_index(drop=True)
-        st.markdown("### 📋 Хронологичен световен дневен тираж с пазарен консенсус")
-        
-        # Голямата обща таблица се извежда моментално без опасност от криене
-        st.dataframe(df_schedule, use_container_width=True, hide_index=True)
-        
-        # --- НОВО: ТОП 10 ЗЛАТНИ ПРОГНОЗИ С КРАСИВИ ВИЗУАЛНИ БАРОВЕ ПОД ТАБЛИЦАТА ---
-        st.markdown("### 🏆 AI Селекция: Топ Мачове с Прогрес Барове за Сигурност")
-        df_pool = pd.DataFrame(pool_for_combo)
-        # Взимаме топ 10 мача по сигурност
-        df_pool = df_pool.sort_values(by="Сигурност", ascending=False).drop_duplicates(subset=["Мач"]).head(10).reset_index(drop=True)
-        
-        for idx, row in df_pool.iterrows():
-            m_text = f"🏟️ **{row['Мач']}** | Пазар: *{row['Пазар']}* -> **{row['Прогноза']}** [Коефициент: {row['Коефициент']}]"
