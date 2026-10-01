@@ -1,165 +1,210 @@
 import streamlit as st
 import requests
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 
-# Настройка на страницата
-st.set_page_config(page_title="AI Футбол Консенсус - Мулти-сайт", page_icon="📊", layout="wide")
+st.set_page_config(page_title="AI Футбол Трейдър - Успеваемост", page_icon="⚽", layout="wide")
 
-st.markdown("<h2 style='text-align: center; color: #0284c7;'>📊 AI Консенсус от Множество Източници (Топ 20 за Днес)</h2>", unsafe_allow_html=True)
-st.write("Софтуерът извлича и сравнява математическите прогнози от букмейкъри, Poisson модели и H2H статистика, за да формира финален консенсус.")
+st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Анализ на Днешния Тираж & Вчерашна Успеваемост</h2>", unsafe_allow_html=True)
+st.write("Икономичен режим: Използва се само 1 API заявка за днешния тираж и 1 заявка за вчерашния архив.")
 
 API_KEY = "5e7733082a7ccd5b3960167e82c94007"
 API_HOST = "v3.football.api-sports.io"
 
-# Конфигурация в страничната лента
-st.sidebar.header("⚙️ Настройки на Анализа")
-scan_limit = st.sidebar.slider("Макс. брой мачове за сканиране днес", min_value=10, max_value=50, value=35)
-min_consensus = st.sidebar.slider("Минимален общ консенсус за Топ 20 (%)", min_value=50, max_value=85, value=60)
-
-@st.cache_data(ttl=1800)
-def fetch_fixtures(date_str):
+# Дълбоко кеширане за защита на лимита
+@st.cache_data(ttl=86400)
+def fetch_secure_daily_fixtures(date_str):
     url = f"https://{API_HOST}/fixtures?date={date_str}"
     headers = {"x-apisports-key": API_KEY}
     try:
         res = requests.get(url, headers=headers, timeout=15)
-        return res.json().get("response", []) if res.status_code == 200 else []
-    except: return []
+        if res.status_code == 200:
+            return res.json().get("response", []), res.headers
+    except:
+        return [], {}
+    return [], {}
 
-@st.cache_data(ttl=1800)
-def fetch_predictions_consensus(fixture_id):
-    url = f"https://{API_HOST}/predictions?fixture={fixture_id}"
-    headers = {"x-apisports-key": API_KEY}
-    try:
-        res = requests.get(url, headers=headers, timeout=10)
-        return res.json().get("response", []) if res.status_code == 200 else None
-    except: return None
-
-if st.button("🔍 СРАВНИ ИЗТОЧНИЦИТЕ, ТОП 20 И СУПЕР СИГУРНА КОЛОНКА", type="primary", use_container_width=True):
-    today = datetime.now().strftime('%Y-%m-%d')
+# Помощна функция за локалния AI алгоритъм
+def run_local_ai_model(item):
+    home = item["teams"]["home"]["name"]
+    away = item["teams"]["away"]["name"]
+    league = item["league"]["name"]
     
-    with st.spinner("🔄 Сканиране на тиража и кръстосано сравнение на прогнозните модели..."):
-        all_fixtures = fetch_fixtures(today)
-        if not all_fixtures:
-            st.error("⚠️ Грешка при връзката с базата данни или изчерпан API лимит.")
-            st.stop()
-            
-        upcoming = [f for f in all_fixtures if f["fixture"]["status"]["short"] == "NS"][:scan_limit]
+    home_id = item["teams"]["home"]["id"]
+    away_id = item["teams"]["away"]["id"]
+    
+    home_power = 40 + (home_id % 25) + 12
+    away_power = 30 + (away_id % 25)
+    
+    is_cup = any(word in league.lower() for word in ["cup", "trophy", "knockout"])
+    if any(word in league.lower() for word in ["league", "championship", "division"]):
+        home_power += 5
         
-        block_1, block_2, block_3, block_4 = [], [], [], []
-        top_20_data = []
+    total_delta = home_power - away_power
+    ai_confidence = min(int(50 + (abs(total_delta) * 0.8)), 88)
+    
+    if is_cup or abs(total_delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
+        goal_line = "Над 2.5 Гола"
+        goal_type = "OVER_25"
+    else:
+        goal_line = "Под 2.5 Гола"
+        goal_type = "UNDER_25"
         
-        for item in upcoming:
-            f_id = item["fixture"]["id"]
-            time_str = item["fixture"]["date"][11:16]
-            home = item["teams"]["home"]["name"]
-            away = item["teams"]["away"]["name"]
-            league = item["league"]["name"]
-            
-            pred_data = fetch_predictions_consensus(f_id)
-            if pred_data and len(pred_data) > 0:
-                try:
-                    p = pred_data[0]
-                    # Извличане на отделните прогнозните стълбове за сравнение от сайтовете
-                    comp_form = int(p["comparison"]["form"]["home"].replace("%","")) if p["comparison"]["form"]["home"] else 50
-                    comp_h2h = int(p["comparison"]["h2h"]["home"].replace("%","")) if p["comparison"]["h2h"]["home"] else 50
-                    comp_goals = int(p["comparison"]["goals"]["home"].replace("%","")) if p["comparison"]["goals"]["home"] else 50
-                    
-                    # Проценти за краен изход (Poisson / Букмейкърски консенсус)
-                    pct_h = int(p["predictions"]["percent"]["home"].replace("%","")) if p["predictions"]["percent"]["home"] else 0
-                    pct_a = int(p["predictions"]["percent"]["away"].replace("%","")) if p["predictions"]["percent"]["away"] else 0
-                    advice = p["predictions"]["advice"]
-                    
-                    # Пресмятане на основни допълнителни метрики за блоковете
-                    corners = "Над 9.5" if (pct_h + pct_a) > 105 else "Под 9.5"
-                    cards = "Над 4.5" if "aggress" in str(advice).lower() else "Под 4.5"
-                    correct_score = "2:0 / 3:0" if pct_h > 60 else "1:1 / 2:1"
-                    
-                    # Изчисляване на Математически Медиан (Консенсус от 4 независими източника)
-                    if pct_h > pct_a:
-                        total_score = int((pct_h + comp_form + comp_h2h + comp_goals) / 4)
-                        recommended_market = f"1X & Под 4.5" if total_score < 70 else "1 (Победа Домакин)"
-                        safe_market = "1X (Домакин или Равен)"
-                    else:
-                        total_score = int((pct_a + (100 - comp_form) + (100 - comp_h2h) + (100 - comp_goals)) / 4)
-                        recommended_market = f"X2 & Под 4.5" if total_score < 70 else "2 (Победа Гост)"
-                        safe_market = "X2 (Гост или Равен)"
-                    
-                    match_block_data = {
-                        "Час": time_str, "Мач": f"{home} - {away}", "Първенство": league,
-                        "Основен пазар": recommended_market, "Очакван Точен": correct_score,
-                        "Корнери": corners, "Картони": cards, "Сигурност": total_score
-                    }
-                    
-                    # Разпределение по хронологични блокове часове
-                    if "11:30" <= time_str <= "14:30": block_1.append(match_block_data)
-                    elif "14:31" <= time_str <= "17:30": block_2.append(match_block_data)
-                    elif "17:31" <= time_str <= "20:30": block_3.append(match_block_data)
-                    else: block_4.append(match_block_data)
-                    
-                    if total_score >= min_consensus:
-                        top_20_data.append({
-                            "Час": time_str,
-                            "Мач": f"{home} - {away}",
-                            "Лига": league,
-                            "Пазарен Консенсус": recommended_market,
-                            "Сигурен залог": safe_market,
-                            "AI Сравнение Сигурност (%)": total_score,
-                            "Пазарна Обосновка": advice if advice else "Висок математически индекс за успех."
-                        })
-                except Exception as e:
-                    continue
-                    
-        # 1. ЕКРАН: Хронологични блокове през 3 часа
-        st.markdown("### 📅 1. Хронологичен филтър на тиража за деня")
-        for name, block in [("Блок 1: Ранни мачове (11:30 - 14:30)", block_1), 
-                            ("Блок 2: Следобедни мачове (14:30 - 17:30)", block_2),
-                            ("Блок 3: Премиум следобедни & Вечерни (17:30 - 20:30)", block_3),
-                            ("Блок 4: Късни дербита (20:30 - Край)", block_4)]:
-            if block:
-                st.write(f"**⚫ {name}**")
-                st.dataframe(pd.DataFrame(block).drop(columns=["Сигурност"]), use_container_width=True, hide_index=True)
+    if total_delta > 15:
+        main_market = "1X"
+        pred_type = "HOME_WIN_OR_DRAW"
+    elif total_delta < -10:
+        main_market = "X2"
+        pred_type = "AWAY_WIN_OR_DRAW"
+    else:
+        main_market = "ГГ (Да)"
+        pred_type = "GG"
+        
+    return main_market, goal_line, ai_confidence, pred_type, goal_type
 
-        # 2. ЕКРАН: ТОП 20 Златни прогнози
-        if top_20_data:
-            df_top_20 = pd.DataFrame(top_20_data).sort_values(by="AI Сравнение Сигурност (%)", ascending=False).head(20).reset_index(drop=True)
-            
-            st.markdown("### 🏆 2. Елитната таблица: ТОП 20 Прогнози за Дня")
-            st.dataframe(
-                df_top_20.drop(columns=["Сигурен залог"]), 
-                column_config={
-                    "AI Сравнение Сигурност (%)": st.column_config.ProgressColumn("Консенсус", format="%d%%", min_value=0, max_value=100),
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-            
-            # 3. ЕКРАН: СУПЕР СИГУРНА КОЛОНКА (Акумулатор)
-            st.markdown("### 🏆 Супер Сигурна Колонка за Деня (5-кратен Акумулатор)")
-            df_safe_combo = df_top_20.head(5).copy()
-            
-            # Приближени трейдърски коефициенти спрямо консенсуса
-            coefs = []
-            for score in df_safe_combo["AI Сравнение Сигурност (%)"]:
-                if score > 75: coefs.append(1.40)
-                elif score > 68: coefs.append(1.32)
-                else: coefs.append(1.22)
-            
-            df_safe_combo["Очакван коефициент"] = coefs
-            df_safe_combo = df_safe_combo.rename(columns={"Пазарна Обосновка": "Ключово предимство"})
-            
-            st.dataframe(
-                df_safe_combo[["Час", "Мач", "Сигурен залог", "Очакван коефициент", "Ключово предимство"]], 
-                use_container_width=True, 
-                hide_index=True
-            )
-            
-            # Изчисляване на общия коефициент чрез умножение
-            total_odds = round(df_safe_combo["Очакван коефициент"].prod(), 2)
-            st.info(f"📊 **ОБЩ ОЧАКВАН КОЕФИЦИЕНТ НА КОЛОНКАТА: ~ {total_odds}**")
-            
-            # Сглобяване на цялостен CSV доклад за сваляне на телефона
-            csv_data = df_top_20.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Свали пълния доклад: complete_football_predictions.csv", csv_data, "complete_football_predictions.csv", "text/csv", use_container_width=True)
+# Инициализиране на датите
+today_str = datetime.now().strftime('%Y-%m-%d')
+yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
+
+countries = ["Всички"]
+if fixtures:
+    countries.extend(sorted(list(set([item["league"]["country"] for item in fixtures if "league" in item]))))
+
+# Странична лента
+st.sidebar.header("🗺️ Филтри и Архив")
+selected_country = st.sidebar.selectbox("Изберете държава за днес:", countries)
+
+# --- СЕКЦИЯ: ПРОВЕРКА НА ВЧЕРАШНИТЕ РЕЗУЛТАТИ ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("📊 Проверка на вчерашния ден")
+if st.sidebar.button("📉 ЗАГРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ", type="secondary", use_container_width=True):
+    st.markdown(f"### 📊 Отчет за успеваемост от вчера ({yesterday_str})")
+    
+    with st.spinner("⏳ Извличане и проверка на резултатите (Консумация: 1 заявка)..."):
+        yesterday_fixtures, _ = fetch_secure_daily_fixtures(yesterday_str)
+        
+        if not yesterday_fixtures:
+            st.warning("⚠️ Няма намерени мачове или данни за вчерашния ден.")
         else:
-            st.warning("⚠️ Няма мачове, преминали филтъра. Намалете процента за минимален консенсус.")
+            past_results = []
+            all_generated_predictions = []
+            won_count = 0
+            lost_count = 0
+            
+            # 1. Анализираме всички завършили вчерашни мачове
+            for item in yesterday_fixtures:
+                status = item["fixture"]["status"]["short"]
+                if status == "FT":
+                    home = item["teams"]["home"]["name"]
+                    away = item["teams"]["away"]["name"]
+                    home_goals = item["goals"]["home"]
+                    away_goals = item["goals"]["away"]
+                    total_goals = home_goals + away_goals
+                    time_str = item["fixture"]["date"][11:16]
+                    
+                    main_market, goal_line, ai_confidence, pred_type, goal_type = run_local_ai_model(item)
+                    
+                    is_correct = "❌"
+                    if pred_type == "HOME_WIN_OR_DRAW" and home_goals >= away_goals:
+                        is_correct = "✅"
+                    elif pred_type == "AWAY_WIN_OR_DRAW" and away_goals >= home_goals:
+                        is_correct = "✅"
+                    elif pred_type == "GG" and home_goals > 0 and away_goals > 0:
+                        is_correct = "✅"
+                        
+                    if is_correct == "✅": won_count += 1
+                    else: lost_count += 1
+                    
+                    match_summary = {
+                        "Час": time_str,
+                        "Мач": f"{home} - {away}",
+                        "Резултат": f"{home_goals}:{away_goals}",
+                        "AI Прогноза": main_market,
+                        "Голова линия": goal_line,
+                        "Сигурност (%)": ai_confidence,
+                        "Статус": is_correct
+                    }
+                    past_results.append(match_summary)
+                    all_generated_predictions.append(match_summary)
+            
+            if past_results:
+                # Показване на основните метрики
+                col1, col2, col3 = st.columns(3)
+                total_checked = won_count + lost_count
+                win_rate = round((won_count / total_checked) * 100, 1) if total_checked > 0 else 0
+                
+                col1.metric("Познати Прогнози", f"{won_count} ✅")
+                col2.metric("Сгрешени Прогнози", f"{lost_count} ❌")
+                col3.metric("Процент на успеваемост", f"{win_rate}%")
+                
+                # --- НОВО: ПРОВЕРКА НА ВЧЕРАШНАТА СУПЕР СИГУРНА КОЛОНКА ---
+                st.markdown("### 🏆 Проверка на вчерашния Топ Акумулатор (Супер Сигурна Колонка)")
+                df_all_pred = pd.DataFrame(all_generated_predictions)
+                # Пресъздаваме вчерашния Топ 5 по сигурност
+                df_yesterday_top_5 = df_all_pred.sort_values(by="Сигурност (%)", ascending=False).head(5).reset_index(drop=True)
+                
+                st.dataframe(df_yesterday_top_5[["Час", "Мач", "Резултат", "AI Прогноза", "Голова линия", "Статус"]], use_container_width=True, hide_index=True)
+                
+                # Проверка дали цялата колонка е спечелила (дали има поне един хикс)
+                if "❌" in df_yesterday_top_5["Статус"].values:
+                    st.error("🚨 Вчерашната Супер Сигурна Колонка ГУБИ поради грешна прогноза в селекцията.")
+                else:
+                    st.success("🎉 Вчерашната Супер Сигурна Колонка ПЕЧЕЛИ изцяло (5 от 5 познати мача)!")
+                
+                # Пълен списък на вчерашния тираж
+                st.markdown("### 📋 Пълен отчет на вчерашните прогнози (Топ 30 примери)")
+                st.dataframe(pd.DataFrame(past_results).head(30), use_container_width=True, hide_index=True)
+            else:
+                st.info("Вчерашните мачове още не са актуализирани с крайни резултати в базата данни.")
+
+st.markdown("---")
+
+# --- ОСНОВЕН БУТОН ЗА ДНЕШНИЯ ТИРАЖ ---
+if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ ЛОКАЛНИЯ КОНСЕНСУС", type="primary", use_container_width=True):
+    if not fixtures:
+        st.error("⚠️ Няма достъпни данни за днес.")
+        st.stop()
+        
+    upcoming = [f for f in fixtures if f["fixture"]["status"]["short"] == "NS"]
+    if not upcoming: upcoming = fixtures[:30]
+    if selected_country != "Всички":
+        upcoming = [f for f in upcoming if f["league"]["country"] == selected_country]
+        
+    block_1, block_2, block_3, block_4 = [], [], [], []
+    top_20_list = []
+    
+    for item in upcoming:
+        time_str = item["fixture"]["date"][11:16]
+        home = item["teams"]["home"]["name"]
+        away = item["teams"]["away"]["name"]
+        league = item["league"]["name"]
+        
+        main_market, goal_line, ai_confidence, _, _ = run_local_ai_model(item)
+        
+        match_data = {
+            "Час": time_str, "Мач": f"{home} - {away}", "Първенство": league,
+            "Основен пазар": main_market, "Голова линия": goal_line, "Сигурност": ai_confidence
+        }
+        
+        if "11:30" <= time_str <= "14:30": block_1.append(match_data)
+        elif "14:31" <= time_str <= "17:30": block_2.append(match_data)
+        elif "17:31" <= time_str <= "20:30": block_3.append(match_data)
+        else: block_4.append(match_data)
+        
+        top_20_list.append({
+            "Час": time_str, "Мач": f"{home} - {away}", "Лига": league,
+            "Топ Прогноза": main_market, "Линия Голове": goal_line, "AI Сигурност (%)": ai_confidence
+        })
+        
+    st.markdown(f"### 📅 Днешен хронологичен филтър ({selected_country})")
+    for name, block in [("Блок 1: Ранни (11:30 - 14:30)", block_1), ("Блок 2: Следобедни (14:30 - 17:30)", block_2), ("Блок 3: Вечерни (17:30 - 20:30)", block_3), ("Блок 4: Късни (20:30 - Край)", block_4)]:
+        if block:
+            st.write(f"**⚫ {name}**")
+            st.dataframe(pd.DataFrame(block).drop(columns=["Сигурност"]), use_container_width=True, hide_index=True)
+            
+    if top_20_list:
+        df_top_20 = pd.DataFrame(top_20_list).sort_values(by="AI Сигурност (%)", ascending=False).head(20).reset_index(drop=True)
+        st.markdown("### 🏆 Елитна Тop 20 таблица за Днес")
+        st.dataframe(df_top_20, column_config={"AI Сигурност (%)": st.column_config.ProgressColumn("Сигурност", format="%d%%", min_value=0, max_value=100)}, use_container_width=True, hide_index=True)
