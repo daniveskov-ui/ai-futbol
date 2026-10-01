@@ -9,17 +9,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Стилизиране за по-красив интерфейс
-st.markdown("""
-    <style>
-    .main-title { font-size: 2.2rem; font-weight: bold; color: #1E3A8A; margin-bottom: 0.5rem; }
-    .subtitle { color: #6B7280; font-size: 1rem; margin-bottom: 2rem; }
-    .card { padding: 1.5rem; border-radius: 0.5rem; background-color: #F3F4F6; border-left: 5px solid #10B981; margin-bottom: 1rem; }
-    </style>
-""", unsafe_allow_html=True)
-
-st.markdown("<div class='main-title'>⚽ AI Футбол Трейдър Pro</div>", unsafe_allow_html=True)
-st.markdown("<div class='subtitle'>Елитни футболни прогнози и генератор на фишове, задвижвани от AI алгоритми</div>", unsafe_allow_html=True)
+# Заглавия
+st.title("⚽ AI Футбол Трейдър Pro")
+st.write("Елитни футболни прогнози и генератор на фишове")
 
 API_KEY = "c21f7bfd4414dea310f1262837a3074e"
 API_HOST = "v3.football.api-sports.io"
@@ -88,7 +80,7 @@ def run_granular_local_ai(item):
             ht_odd = round(odd_home * 1.35, 2)
         elif sign == "2" and odd_away < 1.70: 
             ht_sign, ht_p = "2 (РП)", min(sign_p - 5, 83)
-            ht_odd = round(odd_away * 1.35, 2)
+            ht_odd = round(away_away * 1.35, 2)
         else: 
             ht_sign, ht_p = "Х (РП)", min(74 + (home_id % 12), 89)
             ht_odd = round(1.85 + (home_id % 4) / 10, 2)
@@ -118,11 +110,10 @@ def run_granular_local_ai(item):
     except:
         return "1", 60, 1.45, "Х (РП)", 65, 1.90, "Под 2.5", 65, 1.75, "Под 9.5", 60, 1.80, "Под 4.5", 60, 1.70
 
-# Зареждане на утрешната програма
+# Вземане на данни
 target_date = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
 fixtures, meta_headers = fetch_secure_daily_fixtures(target_date)
 
-# Фалбек списък, ако API-то няма мачове за деня
 if not fixtures or len(fixtures) == 0:
     fixtures = [
         {"fixture": {"date": "2026-10-02T18:45:00+00:00"}, "teams": {"home": {"name": "Leverkusen", "id": 161}, "away": {"name": "Stuttgart", "id": 159}}, "league": {"name": "Bundesliga", "country": "Germany"}},
@@ -132,7 +123,6 @@ if not fixtures or len(fixtures) == 0:
         {"fixture": {"date": "2026-10-02T16:00:00+00:00"}, "teams": {"home": {"name": "Chelsea", "id": 49}, "away": {"name": "Fulham", "id": 52}}, "league": {"name": "Premier League", "country": "England"}},
     ]
 
-# Подготовка на суровите данни за обработка
 raw_data = []
 for item in fixtures:
     time_val = item.get("fixture", {}).get("date", "00:00")[11:16]
@@ -142,71 +132,67 @@ for item in fixtures:
     
     s, sp, so, ht, htp, hto, g, gp, go, c, cp, co, cr, crp, cro = run_granular_local_ai(item)
     
+    # Визуална индикация за сигурност чрез емоджита в самия текст (няма шанс за софтуерен срив)
+    status_icon = "🟢 Топ" if sp >= 80 else "🟡 Ок"
+    
     raw_data.append({
         "Час 📅": time_val,
         "Държава 🗺️": country,
         "Мач 🏟️": f"{h_team} - {a_team}",
-        "Знак 🎯": s,
-        "Коеф. 💰": so,
-        "Сигурност % 📈": sp,
+        "Прогнозa 🎯": f"{s} ({so}) [{sp}%] {status_icon}",
         "1-во Пол. ⏱️": f"{ht} ({hto})",
         "Голове ⚽": f"{g} ({go})",
         "Корнери 📐": f"{c} ({co})",
-        "Картони 🟨": f"{cr} ({cro})"
+        "Картони 🟨": f"{cr} ({cro})",
+        "Conf_Raw": sp
     })
 
-full_df = pd.DataFrame(raw_data).sort_values(by="Час 📅").reset_index(drop=True)
+full_df = pd.DataFrame(raw_data)
 
-# --- СТРАНИЧНА ЛЕНТА (САЙДБАР) ---
-st.sidebar.header("📊 Управление и Филтри")
-
-# 1. Филтър по държава
+# --- САЙДБАР ---
+st.sidebar.header("📊 Опции")
 countries = ["Всички"] + sorted(list(full_df["Държава 🗺️"].unique()))
-selected_country = st.sidebar.selectbox("Избери Държава/Лига:", countries)
+selected_country = st.sidebar.selectbox("Държава:", countries)
+min_conf = st.sidebar.slider("Минимална Сигурност %", 50, 95, 60, 5)
 
-# 2. Филтър по минимална сигурност
-min_conf = st.sidebar.slider("Минимална AI Сигурност (%)", min_value=50, max_value=95, value=60, step=5)
-
-# 3. Инструменти за фиш
 st.sidebar.markdown("---")
-st.sidebar.subheader("🎫 Генератор на Фиш")
-bet_amount = st.sidebar.number_input("Размер на залога (лв.):", min_value=1.0, max_value=1000.0, value=10.0, step=5.0)
-generate_ticket = st.sidebar.button("⚡ СГЛОБИ СИГУРЕН ФИШ", type="primary", use_container_width=True)
+st.sidebar.subheader("🎫 Фиш")
+bet_amount = st.sidebar.number_input("Залог (лв.):", 1.0, 1000.0, 10.0, 5.0)
+generate_ticket = st.sidebar.button("⚡ СГЛОБИ ФИШ", type="primary", use_container_width=True)
 
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 
-# Прилагане на филтрите върху таблицата
-filtered_df = full_df[full_df["Сигурност % 📈"] >= min_conf]
+# Филтриране
+filtered_df = full_df[full_df["Conf_Raw"] >= min_conf]
 if selected_country != "Всички":
     filtered_df = filtered_df[filtered_df["Държава 🗺️"] == selected_country]
 
-# --- ГЕНЕРИРАНЕ НА ФИШ (АКО Е НАТИСНАТ БУТОНА) ---
-if generate_ticket:
-    # Избираме топ 3 мача с най-висока сигурност от филтрираната или цялата база данни
-    top_picks = full_df.sort_values(by="Сигурност % 📈", ascending=False).head(3)
-    
-    if not top_picks.empty:
-        st.markdown("<div class='card'>", unsafe_allow_html=True)
-        st.subheader("🎫 Твоят AI Сигурен Фиш (Топ 3 Алтернативи)")
-        
-        total_odds = 1.0
-        for idx, row in top_picks.iterrows():
-            st.write(f"🔹 **{row['Мач 🏟️']}** | Прогноза: **{row['Знак 🎯']}** | Коефициент: **{row['Коеф. 💰']}** (Сигурност: {row['Сигурност % 📈']}%)")
-            total_odds *= row["Коеф. 💰"]
-        
-        potential_win = total_odds * bet_amount
-        st.markdown(f"**Общ коефициент:** `{total_odds:.2f}`")
-        st.markdown(f"💰 **Потенциална печалба при {bet_amount:.2f} лв. залог:** ` {potential_win:.2f} лв.`")
-        st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.warning("Няма налични мачове за сглобяване на фиш.")
-
-# --- ИЗВЕЖДАНЕ НА ТАБЛИЦАТА С ЦВЕТНО КОДИРАНЕ ---
+# --- ТАБЛИЦА ---
 st.markdown(f"### 📋 Световен дневен тираж (Намерени: {len(filtered_df)} мача)")
 
-# Задължително нулираме индекса тук, за да съвпада перфектно с вътрешните индекси на Styler обекта
-filtered_df = filtered_df.reset_index(drop=True)
+# Махаме колоната Conf_Raw преди показване
+columns_to_show = ["Час 📅", "Държава 🗺️", "Мач 🏟️", "Прогнозa 🎯", "1-во Пол. ⏱️", "Голове ⚽", "Корнери 📐", "Картони 🟨"]
+final_df = filtered_df[columns_to_show].sort_values(by="Час 📅")
 
-# Функция за оцветяване на редове с висока сигурност (Над 80%) въз основа на новите чисти индекси
+# Показваме чист, стабилен DataFrame
+st.dataframe(final_df, use_container_width=True, hide_index=True)
+
+# --- ПОКАЗВАНЕ НА ФИША НАЙ-ОТДОЛУ ПРИ КЛИК ---
+if generate_ticket:
+    top_picks = full_df.sort_values(by="Conf_Raw", ascending=False).head(3)
+    st.markdown("---")
+    st.subheader("🎫 Вашият AI Фиш")
+    total_odds = 1.0
+    for idx, row in top_picks.iterrows():
+        st.write(f"🔹 {row['Мач 🏟️']} -> **{row['Прогнозa 🎯']}**")
+        # Извличане на числото на коефициента от текста
+        try:
+            odd_val = float(row['Прогнозa 🎯'].split('(')[1].split(')')[0])
+            total_odds *= odd_val
+        except:
+            total_odds *= 1.5
+            
+    st.write(f"**Общ коефициент:** `{total_odds:.2f}`")
+    st.write(f"💰 **Потенциална печалба:** `{total_odds * bet_amount:.2f} лв.`")
