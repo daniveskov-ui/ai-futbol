@@ -180,7 +180,6 @@ if not fixtures or len(fixtures) == 0:
 
 upcoming = fixtures
 full_schedule = []
-pool_for_combo = []
 
 for item in upcoming:
     time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
@@ -190,9 +189,10 @@ for item in upcoming:
     
     sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
     
-    # ЛИНЕЙНО ПЪЛНЕНЕ НА МАСИВА - 100% БЕЗОПАСНО БЕЗ ВЛОЖЕНИ РЕЧНИЦИ
     full_schedule.append([
         time_str,
         country,
         f"{home} - {away}",
         f"{sign} ({sign_o}) [{sign_p}%]",
+        f"{ht_sign} ({ht_o}) [{ht_p}%]",
+        f"{goals} ({g_o}) [{goals_p}%]",
