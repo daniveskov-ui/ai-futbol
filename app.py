@@ -120,7 +120,6 @@ st.markdown("---")
 
 # --- ГЕНЕРИРАНЕ НА РЕЗЕРВНИ РЕАЛНИ ДАННИ ПРИ ПРАЗЕН СЪРВЪР ---
 if not fixtures:
-    # Софтуерът създава автоматичен списък, за да не остава екрана празен при сутрешно забавяне на API-то
     fixtures = [
         {"fixture": {"date": "2026-10-01T16:00:00+00:00"}, "teams": {"home": {"name": "Arsenal", "id": 42}, "away": {"name": "Chelsea", "id": 49}}, "league": {"name": "Premier League", "country": "England"}},
         {"fixture": {"date": "2026-10-01T17:30:00+00:00"}, "teams": {"home": {"name": "Real Madrid", "id": 541}, "away": {"name": "Barcelona", "id": 529}}, "league": {"name": "La Liga", "country": "Spain"}},
@@ -147,42 +146,39 @@ else:
         sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
         
         full_schedule.append({
-            "Час 📅": time_str, "Мач 🏟️": f"{home} - {away}",
-            "Знак 🎯": f"{sign} ({sign_o})", "Знак Сигурност": sign_p,
-            "1-во Полувр. ⏱️": f"{ht_sign} ({ht_o})", "РП Сигурност": ht_p,
-            "Голове ⚽": f"{goals} ({g_o})", "Голове Сигурност": goals_p,
-            "Корнери 📐": f"{corners} ({c_o})", "Корнери Сигурност": corners_p,
-            "Картони 🟨": f"{cards} ({card_o})", "Картони Сигурност": cards_p
+            "Час 📅": time_str, 
+            "Мач 🏟️": f"{home} - {away}",
+            "Знак 🎯": f"{sign} ({sign_o})", 
+            "Знак Сигурност (%)": sign_p,
+            "1-во Полувр. ⏱️": f"{ht_sign} ({ht_o})", 
+            "РП Сигурност (%)": ht_p,
+            "Голове ⚽": f"{goals} ({g_o})", 
+            "Голове Сигурност (%)": goals_p,
+            "Корнери 📐": f"{corners} ({c_o})", 
+            "Корнери Сигурност (%)": corners_p,
+            "Картони 🟨": f"{cards} ({card_o})", 
+            "Картони Сигурност (%)": cards_p
         })
         
         match_name = f"{home} - {away}"
-        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Краен Знак", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": sign_p})
-        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "1-во Полувреме", "Прогноза": ht_sign, "Коефициент": ht_o, "Сигурност": ht_p})
-        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Линия Голове", "Прогноза": goals, "Коефициент": g_o, "Сигурност": goals_p})
-        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Линия Корнери", "Прогноза": corners, "Коефициент": c_o, "Сигурност": corners_p})
-        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Линия Картони", "Прогноза": cards, "Коефициент": card_o, "Сигурност": cards_p})
+        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Краен Знак", "Прогноза": sign, "Коефициент": sign_o, "Сигурност (%)": sign_p})
+        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "1-во Полувреме", "Прогноза": ht_sign, "Коефициент": ht_o, "Сигурност (%)": ht_p})
+        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Линия Голове", "Прогноза": goals, "Коефициент": g_o, "Сигурност (%)": goals_p})
+        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Линия Корнери", "Прогноза": corners, "Коефициент": c_o, "Сигурност (%)": corners_p})
+        pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Линия Картони", "Прогноза": cards, "Коефициент": card_o, "Сигурност (%)": cards_p})
 
     if full_schedule:
         df_schedule = pd.DataFrame(full_schedule).sort_values(by="Час 📅", ascending=True).reset_index(drop=True)
         
         st.markdown(f"### 📋 Хронологичен дневен тираж с разпределен пазарен консенсус ({selected_country})")
-        st.dataframe(
-            df_schedule,
-            column_config={
-                "Знак Сигурност": st.column_config.ProgressColumn("Сигурност %", format="%d%%", min_value=0, max_value=100),
-                "РП Сигурност": st.column_config.ProgressColumn("Сигурност %", format="%d%%", min_value=0, max_value=100),
-                "Голове Сигурност": st.column_config.ProgressColumn("Сигурност %", format="%d%%", min_value=0, max_value=100),
-                "Корнери Сигурност": st.column_config.ProgressColumn("Сигурност %", format="%d%%", min_value=0, max_value=100),
-                "Картони Сигурност": st.column_config.ProgressColumn("Сигурност %", format="%d%%", min_value=0, max_value=100)
-            },
-            use_container_width=True,
-            hide_index=True
-        )
+        # Чист и сигурен изход, който избягва синтактичните проблеми с column_config
+        st.dataframe(df_schedule, use_container_width=True, hide_index=True)
         
-        st.markdown("### 🏆 AI Селекция: Супер Сигурна Колонка (ТОП 5 Единични Прогнози с Максимален Прогрес Бар)")
+        st.markdown("### 🏆 AI Селекция: Супер Сигурна Колонка (ТОП 5 Единични Прогнози)")
         df_pool = pd.DataFrame(pool_for_combo)
-        df_pool = df_pool.sort_values(by="Сигурност", ascending=False).drop_duplicates(subset=["Мач"]).head(5).reset_index(drop=True)
+        df_pool = df_pool.sort_values(by="Сигурност (%)", ascending=False).drop_duplicates(subset=["Мач"]).head(5).reset_index(drop=True)
         
-        st.dataframe(
-            df_pool[["Час", "Мач", "Пазар", "Прогноза", "Сигурност", "Коефициент"]],
-            column_config={
+        st.dataframe(df_pool[["Час", "Мач", "Пазар", "Прогноза", "Сигурност (%)", "Коефициент"]], use_container_width=True, hide_index=True)
+        
+        total_odds = round(df_pool["Коефициент"].prod(), 2)
+        st.success(f"📊 **ОБЩ РЕАЛЕН КОЕФИЦИЕНТ НА СУПЕР СЕЛЕКЦИЯТА: ~ {total_odds}**")
