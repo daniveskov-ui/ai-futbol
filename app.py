@@ -73,7 +73,6 @@ countries = ["Всички"]
 if fixtures:
     countries.extend(sorted(list(set([item["league"]["country"] for item in fixtures if "league" in item]))))
 else:
-    # Зареждаме резервен списък за менюто от утрешния ден, ако днешният още се обновява на сървъра
     tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
     tomorrow_fixtures, _ = fetch_secure_daily_fixtures(tomorrow_str)
     if tomorrow_fixtures:
@@ -88,10 +87,10 @@ if meta_headers:
     rem = meta_headers.get('x-ratelimit-requests-remaining', '100')
     st.sidebar.success(f"📊 Оставащи API заявки: {rem}")
 
-# Бутон за принудително изчистване на кеша при проблеми
+# Бутон за принудително изчистване на кеша
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary", use_container_width=True):
     st.cache_data.clear()
-    st.sidebar.info("Кешът е изчистен успешно! Презаредете страницата.")
+    st.sidebar.info("Кешът е изчистен! Презаредете страницата.")
 
 # --- СЕКЦИЯ: ПРОВЕРКА НА ВЧЕРАШНИТЕ РЕЗУЛТАТИ ---
 st.sidebar.markdown("---")
@@ -99,11 +98,11 @@ st.sidebar.subheader("📊 Проверка на вчерашния ден")
 if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ", type="secondary", use_container_width=True):
     st.markdown(f"### 📊 Отчет за успеваемост от вчера ({yesterday_str})")
     
-    with st.spinner("⏳ Извличане и проверка на резултатите (Консумация: 1 заявка)..."):
+    with st.spinner("⏳ Извличане и проверка на резултатите..."):
         yesterday_fixtures, _ = fetch_secure_daily_fixtures(yesterday_str)
         
         if not yesterday_fixtures:
-            st.warning("⚠️ Няма намерени мачове или данни за вчерашния ден.")
+            st.warning("⚠️ Няма данни за вчерашния ден.")
         else:
             past_results = []
             all_generated_predictions = []
@@ -117,7 +116,6 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                     away = item["teams"]["away"]["name"]
                     home_goals = item["goals"]["home"]
                     away_goals = item["goals"]["away"]
-                    total_goals = home_goals + away_goals
                     time_str = item["fixture"]["date"][11:16]
                     
                     main_market, goal_line, ai_confidence, pred_type, goal_type = run_local_ai_model(item)
@@ -154,37 +152,36 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                 col2.metric("Сгрешени Прогнози", f"{lost_count} ❌")
                 col3.metric("Процент на успеваемост", f"{win_rate}%")
                 
-                st.markdown("### 🏆 Проверка на вчерашния Топ Акумулатор (Супер Сигурна Колонка)")
+                st.markdown("### 🏆 Проверка на вчерашния Топ Акумулатор")
                 df_all_pred = pd.DataFrame(all_generated_predictions)
                 df_yesterday_top_5 = df_all_pred.sort_values(by="Сигурност (%)", ascending=False).head(5).reset_index(drop=True)
                 
                 st.dataframe(df_yesterday_top_5[["Час", "Мач", "Резултат", "AI Прогноза", "Голова линия", "Статус"]], use_container_width=True, hide_index=True)
                 
                 if "❌" in df_yesterday_top_5["Статус"].values:
-                    st.error("🚨 Вчерашната Супер Сигурна Колонка ГУБИ поради грешна прогноза в селекцията.")
+                    st.error("🚨 Вчерашната Супер Сигурна Колонка ГУБИ поради грешна прогноза.")
                 else:
-                    st.success("🎉 Вчерашната Супер Сигурна Колонка ПЕЧЕЛИ изцяло (5 от 5 познати мача)!")
+                    st.success("🎉 Вчерашната Супер Сигурна Колонка ПЕЧЕЛИ изцяло!")
                 
-                st.markdown("### 📋 Пълен отчет на вчерашните прогнози (Топ 30 примери)")
+                st.markdown("### 📋 Пълен отчет на вчерашните прогнози")
                 st.dataframe(pd.DataFrame(past_results).head(30), use_container_width=True, hide_index=True)
             else:
-                st.info("Вчерашните мачове още не са актуализирани с крайни резултати в базата данни.")
+                st.info("Вчерашните мачове още не са актуализирани в базата данни.")
 
 st.markdown("---")
 
-# --- ОСНОВЕН БУТОН ЗА ДНЕШНИЯ ТИРАЖ (С АВТОМАТИЧНА ЗАЩИТА СРЕЩУ ПРАЗЕН СЪРВЪР) ---
+# --- ОСНОВЕН БУТОН ЗА ДНЕШНИЯ ТИРАЖ ---
 if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ ЛОКАЛНИЯ КОНСЕНСУС", type="primary", use_container_width=True):
     today_str = datetime.now().strftime('%Y-%m-%d')
     fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
     
-    # 🛡️ АВТОМАТИЧНА ЗАЩИТА: Ако сутрешният тираж все още липсва на сървъра
     if not fixtures:
-        st.warning("🔄 Сървърът все още обновява днешния тираж. Автоматично превключване към утрешната програма за преглед...")
+        st.warning("🔄 Сървърът обновява днешния тираж. Превключване към утрешната програма...")
         tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
         fixtures, meta_headers = fetch_secure_daily_fixtures(tomorrow_str)
         
     if not fixtures:
-        st.error("⚠️ Спортната база данни в момента не връща мачове. Опитайте да изчистите кеша от страничното меню.")
+        st.error("⚠️ Няма върнати мачове от спортната база данни.")
         st.stop()
         
     upcoming = [f for f in fixtures if f["fixture"]["status"]["short"] == "NS"]
@@ -194,7 +191,7 @@ if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ �
         upcoming = [f for f in upcoming if f["league"]["country"] == selected_country]
         
     if not upcoming:
-        st.warning(f"⚠️ Няма намерени предстоящи мачове за избраната дестинация: {selected_country}")
+        st.warning(f"⚠️ Няма предстоящи мачове за: {selected_country}")
         st.stop()
         
     block_1, block_2, block_3, block_4 = [], [], [], []
@@ -219,3 +216,14 @@ if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ИЗЧИСЛИ �
         else: block_4.append(match_data)
         
         top_20_list.append({
+            "Час": time_str, 
+            "Мач": f"{home} - {away}", 
+            "Лига": league,
+            "Топ Прогноза": main_market, 
+            "Линия Голове": goal_line, 
+            "AI Сигурност (%)": ai_confidence
+        })
+        
+    st.markdown(f"### 📅 Хронологичен филтър на заредената програма ({selected_country})")
+    for name, block in [("Блок 1: Ранни (11:30 - 14:30)", block_1), ("Блок 2: Следобедни (14:30 - 17:30)", block_2), ("Блок 3: Вечерни (17:30 - 20:30)", block_3), ("Блок 4: Късни (20:30 - Край)", block_4)]:
+        if block:
