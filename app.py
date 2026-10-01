@@ -3,15 +3,15 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 
-st.set_page_config(page_title="AI Футбол Трейдър - Хронология", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="AI Футбол Трейдър - Автоматичен", page_icon="⚽", layout="wide")
 
-st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Пълен Дневен Тираж по Часове</h2>", unsafe_allow_html=True)
-st.write("Икономичен режим: Използва се само 1 API заявка за днешния тираж и 1 заявка за вчерашния архив.")
+st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Автоматичен Дневен Тираж</h2>", unsafe_allow_html=True)
+st.write("Икономичен режим: Автоматично зареждане с точно 1 API заявка за деня. Без нужда от натискане на бутони.")
 
 API_KEY = "c21f7bfd4414dea310f1262837a3074e"
 API_HOST = "v3.football.api-sports.io"
 
-# Дълбоко кеширане за защита на лимита (24 часа)
+# Дълбоко кеширане за абсолютна защита на лимита (24 часа)
 @st.cache_data(ttl=86400)
 def fetch_secure_daily_fixtures(date_str):
     url = f"https://{API_HOST}/fixtures?date={date_str}"
@@ -68,10 +68,11 @@ def run_local_ai_model(item):
     except:
         return "1X", "Над 1.5 Гола", 65, "HOME_WIN_OR_DRAW", "OVER_15"
 
-# Инициализиране на датите
+# Инициализиране на датите спрямо реалното време
 today_str = datetime.now().strftime('%Y-%m-%d')
 yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 
+# АВТОМАТИЧНО ИЗВЛИЧАНЕ НА ДАННИТЕ
 fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
 
 # Подсигуряване на списъка с държави
@@ -100,7 +101,7 @@ st.sidebar.subheader("📊 Проверка на вчерашния ден")
 if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ", type="secondary", use_container_width=True):
     st.markdown(f"### 📊 Отчет за успеваемост от вчера ({yesterday_str})")
     
-    with st.spinner("⏳ Извличане и проверка на резултатите..."):
+    with st.spinner("⏳ Проверка на вчерашния архив..."):
         yesterday_fixtures, _ = fetch_secure_daily_fixtures(yesterday_str)
         
         if not yesterday_fixtures:
@@ -154,71 +155,69 @@ if st.sidebar.button("📉 ЗАРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ"
                 total_checked = won_count + lost_count
                 win_rate = round((won_count / total_checked) * 100, 1) if total_checked > 0 else 0
                 
-                col1.metric("Познати Прогнози", f"{won_count} ✅")
-                col2.metric("Сгрешени Прогнози", f"{lost_count} ❌")
-                col3.metric("Процент на успеваемост", f"{win_rate}%")
+                col1.metric("Познати", f"{won_count} ✅")
+                col2.metric("Сгрешени", f"{lost_count} ❌")
+                col3.metric("Успеваемост", f"{win_rate}%")
                 
-                st.markdown("### 🏆 Проверка на вчерашния Топ Акумулатор")
                 df_all_pred = pd.DataFrame(all_generated_predictions)
                 df_yesterday_top_5 = df_all_pred.sort_values(by="Ref_Confidence", ascending=False).head(5).reset_index(drop=True)
-                
                 st.dataframe(df_yesterday_top_5[["Час", "Мач", "Резултат", "AI Прогноза", "Голова линия", "Статус"]], use_container_width=True, hide_index=True)
                 
-                if "❌" in df_yesterday_top_5["Статус"].values:
-                    st.error("🚨 Вчерашната Супер Сигурна Колонка ГУБИ поради грешна прогноза.")
-                else:
-                    st.success("🎉 Вчерашната Супер Сигурна Колонка ПЕЧЕЛИ изцяло!")
-                
-                st.markdown("### 📋 Пълен отчет на вчерашните прогнози")
-                df_past_print = pd.DataFrame(past_results).drop(columns=["Ref_Confidence"])
-                st.dataframe(df_past_print.head(30), use_container_width=True, hide_index=True)
-            else:
-                st.info("Вчерашните мачове още не са актуализирани в базата данни.")
+                st.dataframe(pd.DataFrame(past_results).drop(columns=["Ref_Confidence"]).head(20), use_container_width=True, hide_index=True)
 
 st.markdown("---")
 
-# --- ОСНОВЕН БУТОН ЗА ДНЕШНИЯ ТИРАЖ ---
-if st.button("⚡ СКАНИРАЙ ДНЕШНИЯ ТИРАЖ И ПОДРЕДИ ХРОНОЛОГИЧНО", type="primary", use_container_width=True):
-    today_str = datetime.now().strftime('%Y-%m-%d')
-    fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
-    
-    if not fixtures:
-        st.warning("🔄 Сървърът обновява днешния тираж. Превключване към резервна програма...")
-        tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
-        fixtures, meta_headers = fetch_secure_daily_fixtures(tomorrow_str)
-        
-    if not fixtures:
-        st.error("⚠️ Няма върнати мачове от спортната база данни.")
-        st.stop()
-        
+# --- АВТОМАТИЧНО ГЕНЕРИРАНЕ НА ДНЕШНИЯ ТИРАЖ (БЕЗ БУТОН) ---
+if not fixtures:
+    st.warning("🔄 Сървърът обновява днешния тираж. Превключване към резервна програма...")
+    tomorrow_str = (datetime.now() + timedelta(days=1)).strftime('%Y-%m-%d')
+    fixtures, meta_headers = fetch_secure_daily_fixtures(tomorrow_str)
+
+if not fixtures:
+    st.error("⚠️ Няма върнати мачове от спортната база данни. Опитайте да изчистите кеша.")
+else:
     upcoming = fixtures
-    
     if selected_country != "Всички":
         upcoming = [f for f in upcoming if f.get("league", {}).get("country") == selected_country]
         
     if not upcoming:
-        st.warning(f"⚠️ Няма намерени мачове в базата за дестинация: {selected_country}. Изберете 'Всички' от менюто.")
-        st.stop()
+        st.warning(f"⚠️ Няма намерени мачове за дестинация: {selected_country}. Изберете 'Всички' от менюто.")
+    else:
+        full_schedule_list = []
         
-    full_schedule_list = []
-    
-    for item in upcoming:
-        time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
-        home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
-        away = item.get("teams", {}).get("away", {}).get("name", "Гост")
-        league = item.get("league", {}).get("name", "Лига")
-        
-        main_market, goal_line, ai_confidence, _, _ = run_local_ai_model(item)
-        
-        full_schedule_list.append({
-            "Час 📅": time_str,
-            "Мач 🏟️": f"{home} - {away}",
-            "Първенство 🏆": league,
-            "Пазарен Консенсус 🎯": main_market,
-            "Линия Голове ⚽": goal_line,
-            "AI Сигурност (%)": ai_confidence
-        })
-        
-    if full_schedule_list:
-        # Превръщане в DataFrame и твърдо сортиране по ЧАС (хронологично)
-        df_schedule = pd.DataFrame(full_schedule_list)
+        for item in upcoming:
+            time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
+            home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
+            away = item.get("teams", {}).get("away", {}).get("name", "Гост")
+            league = item.get("league", {}).get("name", "Лига")
+            
+            main_market, goal_line, ai_confidence, _, _ = run_local_ai_model(item)
+            
+            full_schedule_list.append({
+                "Час 📅": time_str,
+                "Мач 🏟️": f"{home} - {away}",
+                "Първенство 🏆": league,
+                "Пазарен Консенсус 🎯": main_market,
+                "Линия Голове ⚽": goal_line,
+                "AI Сигурност (%)": ai_confidence
+            })
+            
+        if full_schedule_list:
+            df_schedule = pd.DataFrame(full_schedule_list)
+            df_schedule = df_schedule.sort_values(by="Час 📅", ascending=True).reset_index(drop=True)
+            
+            st.markdown(f"### 📋 Пълен хронологичен график на мачовете ({selected_country})")
+            st.dataframe(
+                df_schedule,
+                column_config={
+                    "AI Сигурност (%)": st.column_config.ProgressColumn("Сигурност", format="%d%%", min_value=0, max_value=100)
+                },
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            st.markdown("### 🏆 AI Селекция: Супер Сигурна Колонка за Деня")
+            df_top_5 = df_schedule.sort_values(by="AI Сигурност (%)", ascending=False).head(5).reset_index(drop=True)
+            df_top_5["Очакван Коефициент"] = ["~1.42", "~1.35", "~1.31", "~1.26", "~1.21"][:len(df_top_5)]
+            
+            st.dataframe(
