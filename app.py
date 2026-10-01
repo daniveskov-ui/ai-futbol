@@ -14,7 +14,6 @@ API_HOST = "v3.football.api-sports.io"
 # Дълбоко кеширане за абсолютна защита на лимита (24 часа)
 @st.cache_data(ttl=86400)
 def fetch_secure_daily_fixtures(date_str):
-    # Добавяме параметъра &odds= за автоматично извличане на реалните пазарни коефициенти наведнъж
     url = f"https://{API_HOST}/fixtures?date={date_str}"
     headers = {"x-apisports-key": API_KEY}
     try:
@@ -189,10 +188,8 @@ else:
             home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
             away = item.get("teams", {}).get("away", {}).get("name", "Гост")
             
-            # Извикваме разширения модел с поддръжка на реални коефициенти
             sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
             
-            # Показваме прогнозата заедно с коефициента в чист вид: "1 [Коеф: 1.45]"
             full_schedule.append({
                 "Час 📅": time_str, "Мач 🏟️": f"{home} - {away}",
                 "Знак 🎯": f"{sign} ({sign_o})", "Знак Сигурност": sign_p,
@@ -204,3 +201,4 @@ else:
             
             match_name = f"{home} - {away}"
             pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "Краен Знак", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": sign_p})
+            pool_for_combo.append({"Час": time_str, "Мач": match_name, "Пазар": "1-во Полувреме", "Прогноза": ht_sign, "Коефициент": ht_o, "Сигурност": ht_p})
