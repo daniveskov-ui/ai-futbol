@@ -20,12 +20,9 @@ def fetch_secure_daily_fixtures(date_str):
         res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             data = res.json()
-            
-            # Проверка за вътрешни грешки в API (например изтекъл лимит или грешен ключ)
             if data.get("errors"):
                 st.error(f"🚨 Грешка, върната от спортното API: {data.get('errors')}")
                 return [], res.headers
-                
             return data.get("response", []), res.headers
         else:
             st.error(f"🚨 Сървърна грешка от API доставчика. Статус код: {res.status_code}")
@@ -43,17 +40,15 @@ def run_granular_local_ai(item):
         
         if home_id is None: home_id = 1
         if away_id is None: away_id = 2
+        if league is None: league = "Лига"
         
-        # Математически модел за изчисляване на силата на отборите (Локален Elo симулатор)
         home_power = 40 + (home_id % 25) + 12
         away_power = 30 + (away_id % 25)
         
-        is_cup = any(w in league.lower() for w in ["cup", "trophy", "knockout"])
         if any(w in league.lower() for w in ["league", "championship", "division"]): 
             home_power += 5
         delta = home_power - away_power
         
-        # 1. Пазар: Твърд знак и Реални Коефициенти (математически изчислени спрямо силата)
         if delta > 16: 
             sign = "1"
             sign_p = min(75 + (home_id % 12), 92)
@@ -67,7 +62,6 @@ def run_granular_local_ai(item):
             sign_p = min(60 + (home_id % 15), 78)
             odd_val = round(2.90 + (home_id % 5) / 10, 2)
         
-        # 2. Пазар: Първо Полувреме (РП 1Х2)
         if sign == "1" and delta > 22: 
             ht_sign, ht_p = "1 (РП)", min(sign_p - 5, 85)
             ht_odd = round(odd_val * 1.35, 2)
@@ -78,7 +72,6 @@ def run_granular_local_ai(item):
             ht_sign, ht_p = "Х (РП)", min(74 + (home_id % 12), 89)
             ht_odd = round(1.85 + (home_id % 4) / 10, 2)
         
-        # 3. Пазар: Голове Над/Под 2.5
         if abs(delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
             goals, goals_p = "Над 2.5", min(70 + (home_id % 14), 89)
             g_odd = round(1.65 + (home_id % 3) / 10, 2)
@@ -86,7 +79,6 @@ def run_granular_local_ai(item):
             goals, goals_p = "Под 2.5", min(72 + (away_id % 14), 91)
             g_odd = round(1.70 + (away_id % 3) / 10, 2)
         
-        # 4. Пазар: Корнери
         if goals == "Над 2.5" or any(w in league.lower() for w in ["england", "scotland", "japan"]):
             corners, corners_p = "Над 9.5", min(68 + (home_id % 15), 88)
             c_odd = round(1.80 + (home_id % 3) / 10, 2)
@@ -94,7 +86,6 @@ def run_granular_local_ai(item):
             corners, corners_p = "Под 9.5", min(70 + (away_id % 13), 87)
             c_odd = round(1.75 + (away_id % 3) / 10, 2)
         
-        # 5. Пазар: Картони
         if sign == "Х" or any(w in league.lower() for w in ["spain", "italy", "brazil"]):
             cards, cards_p = "Над 4.5", min(72 + (home_id % 14), 90)
             card_odd = round(1.90 + (home_id % 3) / 10, 2)
@@ -120,7 +111,7 @@ if meta_headers:
 
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary", use_container_width=True):
     st.cache_data.clear()
-    st.sidebar.info("Кешът е изчистен! Презаредете страницата, за да изпратите нова заявка.")
+    st.sidebar.info("Кешът е изчистен! Презаредете страницата.")
 
 # --- ВЧЕРАШНА УСПЕВАЕМОСТ ---
 st.sidebar.markdown("---")
@@ -157,63 +148,79 @@ if st.sidebar.button("📊 ЗАГРЕДИ ВЧЕРАШНА УСПЕВАЕМОС�
                     })
             if past_results:
                 st.dataframe(pd.DataFrame(past_results).head(20), use_container_width=True, hide_index=True)
-            else:
-                st.warning("Вчерашните мачове още не са завършили или липсват крайни резултати.")
 
 st.markdown("---")
 
-# --- АВТОМАТИЧНО ЗАРЕЖДАНЕ НА АБСОЛЮТНО ВСИЧКИ МАЧОВЕ НАВЕДНЪЖ ---
 if not fixtures:
-    st.error("⚠️ Няма върнати мачове от спортната база данни. Моля, проверете диагностичните съобщения по-горе или опитайте да изчистите кеша.")
+    st.error("⚠️ Изчистете кеш паметта от менюто встрани.")
 else:
-    upcoming = fixtures
-    
     full_schedule = []
     pool_for_combo = []
     
-    for item in upcoming:
-        time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
-        home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
-        away = item.get("teams", {}).get("away", {}).get("name", "Гост")
-        country = item.get("league", {}).get("country", "Световни")
+    for item in fixtures:
+        # Твърда защита срещу празни полета от API структурата
+        fixture_data = item.get("fixture", {})
+        date_raw = fixture_data.get("date", "")
+        time_str = date_raw[11:16] if len(date_raw) >= 16 else "00:00"
+        
+        teams = item.get("teams", {})
+        home = teams.get("home", {}).get("name", "Домакин")
+        away = teams.get("away", {}).get("name", "Гост")
+        
+        league_data = item.get("league", {})
+        country = league_data.get("country", "Световни")
+        
+        if not home: home = "Домакин"
+        if not away: away = "Гост"
+        if not country: country = "Световни"
         
         sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
         
         full_schedule.append({
             "Час 📅": time_str, 
-            "Държава 🗺️": country,
+            "Държава 🗺️": str(country),
             "Мач 🏟️": f"{home} - {away}",
-            "Знак 🎯": f"{sign} ({sign_o}) [Сиг: {sign_p}%]",
-            "1-во Пол. ⏱️": f"{ht_sign} ({ht_o}) [Сиг: {ht_p}%]",
-            "Голове ⚽": f"{goals} ({g_o}) [Сиг: {goals_p}%]",
-            "Корнери 📐": f"{corners} ({c_o}) [Сиг: {corners_p}%]",
-            "Картони 🟨": f"{cards} ({card_o}) [Сиг: {cards_p}%]",
-            "Сигурност": sign_p  # Скрито служебно поле за филтрация
+            "Знак 🎯": f"{sign} ({sign_o}) [{sign_p}%]",
+            "1-во Пол. ⏱️": f"{ht_sign} ({ht_o}) [{ht_p}%]",
+            "Голове ⚽": f"{goals} ({g_o}) [{goals_p}%]",
+            "Корнери 📐": f"{corners} ({c_o}) [{corners_p}%]",
+            "Картони 🟨": f"{cards} ({card_o}) [{cards_p}%]",
+            "Сигурност": sign_p
         })
         
-        # Запис в пула за фишове
         pool_for_combo.append({
             "Мач": f"{home} - {away}", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": sign_p
         })
 
-    df = pd.DataFrame(full_schedule)
-    df = df.sort_values(by="Час 📅")
+    if full_schedule:
+        df = pd.DataFrame(full_schedule)
+        df = df.sort_values(by="Час 📅")
 
-    # --- СТАТИСТИКА ЗА ДЕНЯ ---
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("🗺️ Общо мачове в тиража", len(df))
-    with col2:
-        st.metric("🎯 Препоръчан пазар", "Първо Полувреме (РП)")
-    with col3:
-        st.metric("⚡ Икономия на ресурси", "100% (Кеширан тираж)")
+        # --- СТАТИСТИКА ЗА ДЕНЯ ---
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("🗺️ Общо мачове в тиража", len(df))
+        with col2:
+            st.metric("🎯 Препоръчан пазар", "Първо Полувреме")
+        with col3:
+            st.metric("⚡ Икономия на ресурси", "100% (Кеширан)")
 
-    # --- ФИЛТРИ И ТЪРСЕНЕ ---
-    st.markdown("### 🔍 Бързо търсене и филтриране")
-    search_col1, search_col2 = st.columns(2)
-    with search_col1:
-        search_query = st.text_input("🔍 Търси отбор или държава:", "").lower()
-    with search_col2:
-        min_confidence = st.slider("🎯 Минимална сигурност на знака (%):", 60, 95, 60)
+        # --- ФИЛТРИ И ТЪРСЕНЕ ---
+        st.markdown("### 🔍 Бързо търсене и филтриране")
+        search_col1, search_col2 = st.columns(2)
+        with search_col1:
+            search_query = st.text_input("🔍 Търси отбор или държава:", "").lower()
+        with search_col2:
+            min_confidence = st.slider("🎯 Минимална сигурност на знака (%):", 60, 95, 60)
 
-    # Прилагане на филтри
+        # Прилагане на филтри
+        if search_query:
+            df = df[df["Мач 🏟️"].str.lower().str.contains(search_query) | df["Държава 🗺️"].str.lower().str.contains(search_query)]
+        df = df[df["Сигурност"] >= min_confidence]
+
+        # Премахване на скрития стълб и показване
+        display_df = df.drop(columns=["Сигурност"])
+
+        st.markdown("### 📊 Пълен списък с AI анализи")
+        
+        # Подсигуряване на визуализацията чрез изрично подаване на чист DataFrame
