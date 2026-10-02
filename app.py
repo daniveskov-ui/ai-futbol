@@ -193,15 +193,16 @@ else:
     st.markdown("---")
     st.markdown("### ⚙️ Филтриране по Сигурност")
     
-    # НОВИ БЕЗОПАСНИ БУТОНИ ЗА СИГУРНОСТТА - ЗАМЕСТВАТ СЛАЙДЕРА
+    # КОРИГИРАНИ БУТОНИ С РЕАЛНИ СТОЙНОСТИ: Първият е избран по подразбиране
     filter_type = st.radio(
         "Избери ниво на сигурност за показване:",
-        ["Всички мачове за деня (60%+)", "Топ мачове (70%+ сигурност)", "Супер сигурни (80%+ сигурност)"]
+        ["Всички налични мачове (Дефолт)", "Средна сигурност (Над 65%)", "Най-висока сигурност (Над 72%)"],
+        index=0
     )
     
     filtered_df = df.copy()
-    if "70%+" in filter_type:
-        filtered_df = filtered_df[filtered_df["Сигурност"] >= 70]
-    elif "80%+" in filter_type:
-        filtered_df = filtered_df[filtered_df["Сигурност"] >= 80]
+    if "Над 65%" in filter_type:
+        filtered_df = filtered_df[filtered_df["Сигурност"] >= 65]
+    elif "Над 72%" in filter_type:
+        filtered_df = filtered_df[filtered_df["Сигурност"] >= 72]
 
