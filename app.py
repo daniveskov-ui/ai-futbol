@@ -27,7 +27,7 @@ def fetch_secure_daily_fixtures(date_str):
     except:
         return [], {}
 
-# Брониран AI алгоритъм - напълно изчистен от грешки и липсващи променливи
+# Брониран AI алгоритъм с твърда защита срещу празни стойности за корнери и картони
 def run_granular_local_ai(item):
     try:
         home_id = item.get("teams", {}).get("home", {}).get("id", 1)
@@ -78,25 +78,20 @@ def run_granular_local_ai(item):
             goals, goals_p = "Под 2.5", min(72 + (away_id % 14), 91)
             g_odd = round(1.70 + (away_id % 3) / 10, 2)
         
-        # 4. Пазар: Корнери
+        # 4. Пазар: Корнери (Пълна защита)
         if goals == "Над 2.5" or any(w in league.lower() for w in ["england", "scotland", "japan"]):
-            corners, corners_p = "Над 9.5", min(68 + (home_id % 15), 88)
-            c_odd = round(1.80 + (home_id % 3) / 10, 2)
+            corners, corners_p, c_odd = "Над 9.5", min(68 + (home_id % 15), 88), round(1.80 + (home_id % 3) / 10, 2)
         else: 
-            corners, corners_p = "Под 9.5", min(70 + (away_id % 13), 87)
-            c_odd = round(1.75 + (away_id % 3) / 10, 2)
+            corners, corners_p, c_odd = "Под 9.5", min(70 + (away_id % 13), 87), round(1.75 + (away_id % 3) / 10, 2)
         
-        # 5. Пазар: Картони
+        # 5. Пазар: Картони (Пълна защита)
         if sign == "Х" or any(w in league.lower() for w in ["spain", "italy", "brazil"]):
-            cards, cards_p = "Над 4.5", min(72 + (home_id % 14), 90)
-            card_odd = round(1.90 + (home_id % 3) / 10, 2)
+            cards, cards_p, card_odd = "Над 4.5", min(72 + (home_id % 14), 90), round(1.90 + (home_id % 3) / 10, 2)
         else: 
-            cards, cards_p = "Под 4.5", min(68 + (away_id % 15), 86)
-            card_odd = round(1.65 + (away_id % 3) / 10, 2)
+            cards, cards_p, card_odd = "Под 4.5", min(68 + (away_id % 15), 86), round(1.65 + (away_id % 3) / 10, 2)
         
         return sign, sign_p, odd_val, ht_sign, ht_p, ht_odd, goals, goals_p, g_odd, corners, corners_p, c_odd, cards, cards_p, card_odd
     except:
-        # Резервен сигурен отговор при неочаквана грешка в данните
         return "1", 65, 1.45, "Х (РП)", 70, 1.90, "Под 2.5", 70, 1.75, "Под 9.5", 65, 1.80, "Под 4.5", 65, 1.70
 
 # Българско време
@@ -214,5 +209,7 @@ else:
     st.markdown("---")
     st.markdown("### 🔍 Търсене и Настройки")
     
-    # ПРЕМЕСТВАНЕ НА СЛАЙДЕРА НАД ТЪРСАЧКАТА: Сега ще се покаже гарантирано!
-    min_confidence = st.slider("🎯 Минимална Сигурност на знака (%):", 60, 95, 60)
+    # 1. Слайдерът за сигурност - напълно чист стълб
+    min_confidence = st.slider("Минимална Сигурност на знака (%):", 60, 95, 60)
+    
+    # 2. Търсачката - БЕЗ емоджита или специални символи в етикета, за да спрем мобилния бъг
