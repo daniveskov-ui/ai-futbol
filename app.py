@@ -123,8 +123,20 @@ else:
     
     for item in fixtures:
         fixture_data = item.get("fixture", {})
-        date_raw = fixture_data.get("date", "")
-        time_str = date_raw[11:16] if len(date_raw) >= 16 else "00:00"
+        date_raw = fixture_data.get("date", "") 
+        
+        # --- БЕЗОПАСЕН И СИГУРЕН ФИКС ЗА БЪЛГАРСКО ВРЕМЕ ---
+        time_str = "00:00"
+        if date_raw and len(date_raw) >= 16:
+            try:
+                # Взимане на базовата дата без часовата зона чрез разделяне на стринга
+                base_time = date_raw[:19].replace("T", " ")
+                utc_dt = datetime.strptime(base_time, "%Y-%m-%d %H:%M:%S")
+                # Превръщане в българско време (+3 часа разлика)
+                bg_dt = utc_dt + timedelta(hours=3)
+                time_str = bg_dt.strftime("%H:%M")
+            except:
+                time_str = date_raw[11:16]
         
         teams = item.get("teams", {})
         home = teams.get("home", {}).get("name", "Домакин")
@@ -152,7 +164,10 @@ else:
         })
         
         pool_for_combo.append({
-            "Мач": f"{home} - {away}", "Прогноза": sign, "Коефициент": sign_o, "Сигурност": sign_p
+            "Мач": f"{home} - {away}", 
+            "Прогноза": sign, 
+            "Коефициент": sign_o, 
+            "Сигурност": sign_p
         })
 
     if full_schedule:
@@ -164,7 +179,7 @@ else:
         with col1:
             st.metric("🗺️ Общо мачове в тиража", len(df))
         with col2:
-            st.metric("🎯 Основен пазар", "Разделен по табове")
+            st.metric("🎯 Основен пазар", "Българско време (БГ)")
         with col3:
             st.metric("⚡ Икономия на ресурси", "100% (Кеширан)")
 
@@ -176,18 +191,17 @@ else:
         with search_col2:
             min_confidence = st.slider("🎯 Минимална сигурност на знака (%):", 60, 95, 60)
 
-        # Прилагане на филтри
+        # Прилагане на филтри към основната таблица
+        filtered_df = df.copy()
         if search_query:
-            df = df[df["Мач 🏟️"].str.lower().str.contains(search_query) | df["Държава 🗺️"].str.lower().str.contains(search_query)]
-        df = df[df["Сигурност"] >= min_confidence]
+            filtered_df = filtered_df[filtered_df["Мач 🏟️"].str.lower().str.contains(search_query) | filtered_df["Държава 🗺️"].str.lower().str.contains(search_query)]
+        filtered_df = filtered_df[filtered_df["Сигурност"] >= min_confidence]
 
-        st.markdown("### 📊 AI Анализи по Пазари")
+        st.markdown("### 📊 AI Анализи по Пазари (БГ ВРЕМЕ)")
         
-        if not df.empty:
-            # СЪЗДАВАНЕ НА МОБИЛНИ ТАБОВЕ ЗА ПАЗАРИТЕ
+        if not filtered_df.empty:
             tab1, tab2, tab3 = st.tabs(["🎯 Краен Знак & РП", "⚽ Голове & Корнери", "🟨 Картони"])
             
-            # CSS Стил за перфектна мобилна таблица
             table_style = """
             <style>
                 table { color: white; width: 100%; border-collapse: collapse; }
@@ -197,25 +211,15 @@ else:
             """
 
             with tab1:
-                st.write("📈 *Прогнози за Краен победител (1Х2) и Първо полувреме (РП):*")
-                df_tab1 = df[["Час 📅", "Мач 🏟️", "Знак 🎯", "1-во Пол. ⏱️"]]
+                df_tab1 = filtered_df[["Час 📅", "Мач 🏟️", "Знак 🎯", "1-во Пол. ⏱️"]]
                 html_t1 = df_tab1.to_html(index=False, classes='table', escape=False)
                 st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t1}</div>', unsafe_allow_html=True)
 
             with tab2:
-                st.write("⚽ *Прогнози за линии на Голове (Над/Под 2.5) и Корнери (Над/Под 9.5):*")
-                df_tab2 = df[["Час 📅", "Мач 🏟️", "Голове ⚽", "Корнери 📐"]]
+                df_tab2 = filtered_df[["Час 📅", "Мач 🏟️", "Голове ⚽", "Корнери 📐"]]
                 html_t2 = df_tab2.to_html(index=False, classes='table', escape=False)
                 st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t2}</div>', unsafe_allow_html=True)
 
             with tab3:
-                st.write("🟨 *Прогнози за общ брой официални предупреждения (Над/Под 4.5):*")
-                df_tab3 = df[["Час 📅", "Мач 🏟️", "Държава 🗺️", "Картони 🟨"]]
+                df_tab3 = filtered_df[["Час 📅", "Мач 🏟️", "Държава 🗺️", "Картони 🟨"]]
                 html_t3 = df_tab3.to_html(index=False, classes='table', escape=False)
-                st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t3}</div>', unsafe_allow_html=True)
-                
-        else:
-            st.warning("Няма намерени мачове, отговарящи на зададените филтри. Намалете слайдера за сигурност.")
-
-        # --- АВТОМАТИЧЕН КОМБИНИРАН ФИШ ---
-        st.markdown("---")
