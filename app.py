@@ -11,7 +11,7 @@ st.write("Икономичен режим: 1 заявка за деня. Авт�
 API_KEY = "ca61b57dd810980c1604d630c470309e"
 API_HOST = "v3.football.api-sports.io"
 
-# Дълбоко кеширане за абсолютна защита на лимита (24 часа) с диагностика на грешки
+# Дълбоко кеширане за защита на лимита (24 часа)
 @st.cache_data(ttl=86400)
 def fetch_secure_daily_fixtures(date_str):
     url = f"https://{API_HOST}/fixtures?date={date_str}"
@@ -21,17 +21,13 @@ def fetch_secure_daily_fixtures(date_str):
         if res.status_code == 200:
             data = res.json()
             if data.get("errors"):
-                st.error(f"🚨 Грешка, върната от спортното API: {data.get('errors')}")
                 return [], res.headers
             return data.get("response", []), res.headers
-        else:
-            st.error(f"🚨 Сървърна грешка от API доставчика. Статус код: {res.status_code}")
-            return [], {}
-    except Exception as e:
-        st.error(f"🚨 Проблем с интернет връзката или API заявката: {e}")
+        return [], {}
+    except:
         return [], {}
 
-# Бронирана функция за локалния AI алгоритъм с вградена защита срещу празни данни
+# Локален AI алгоритъм
 def run_granular_local_ai(item):
     try:
         home_id = item.get("teams", {}).get("home", {}).get("id", 1)
@@ -40,13 +36,9 @@ def run_granular_local_ai(item):
         
         if home_id is None: home_id = 1
         if away_id is None: away_id = 2
-        if league is None: league = "Лига"
         
         home_power = 40 + (home_id % 25) + 12
         away_power = 30 + (away_id % 25)
-        
-        if any(w in league.lower() for w in ["league", "championship", "division"]): 
-            home_power += 5
         delta = home_power - away_power
         
         if delta > 16: 
@@ -72,154 +64,140 @@ def run_granular_local_ai(item):
             ht_sign, ht_p = "Х (РП)", min(74 + (home_id % 12), 89)
             ht_odd = round(1.85 + (home_id % 4) / 10, 2)
         
-        if abs(delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
-            goals, goals_p = "Над 2.5", min(70 + (home_id % 14), 89)
-            g_odd = round(1.65 + (home_id % 3) / 10, 2)
-        else: 
-            goals, goals_p = "Под 2.5", min(72 + (away_id % 14), 91)
-            g_odd = round(1.70 + (away_id % 3) / 10, 2)
+        goals, goals_p = "Под 2.5", min(72 + (away_id % 14), 91)
+        g_odd = round(1.70 + (away_id % 3) / 10, 2)
         
-        if goals == "Над 2.5" or any(w in league.lower() for w in ["england", "scotland", "japan"]):
-            corners, corners_p = "Над 9.5", min(68 + (home_id % 15), 88)
-            c_odd = round(1.80 + (home_id % 3) / 10, 2)
-        else: 
-            corners, corners_p = "Под 9.5", min(70 + (away_id % 13), 87)
-            c_odd = round(1.75 + (away_id % 3) / 10, 2)
+        corners, corners_p = "Под 9.5", min(70 + (away_id % 13), 87)
+        c_odd = round(1.75 + (away_id % 3) / 10, 2)
         
-        if sign == "Х" or any(w in league.lower() for w in ["spain", "italy", "brazil"]):
-            cards, cards_p = "Над 4.5", min(72 + (home_id % 14), 90)
-            card_odd = round(1.90 + (home_id % 3) / 10, 2)
-        else: 
-            cards, cards_p = "Под 4.5", min(68 + (away_id % 15), 86)
-            card_odd = round(1.65 + (away_id % 3) / 10, 2)
+        cards, cards_p = "Под 4.5", min(68 + (away_id % 15), 86)
+        card_odd = round(1.65 + (away_id % 3) / 10, 2)
         
         return sign, sign_p, odd_val, ht_sign, ht_p, ht_odd, goals, goals_p, g_odd, corners, corners_p, c_odd, cards, cards_p, card_odd
     except:
         return "1", 60, 1.45, "Х (РП)", 65, 1.90, "Под 2.5", 65, 1.75, "Под 9.5", 60, 1.80, "Под 4.5", 60, 1.70
 
-# Настройка на датите
+# Българско време
+def get_clean_bg_time(date_raw):
+    if date_raw and len(date_raw) >= 16:
+        try:
+            base_time = date_raw[:19].replace("T", " ")
+            utc_dt = datetime.strptime(base_time, "%Y-%m-%d %H:%M:%S")
+            return (utc_dt + timedelta(hours=3)).strftime("%H:%M")
+        except:
+            return date_raw[11:16]
+    return "00:00"
+
 today_str = datetime.now().strftime('%Y-%m-%d')
 yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
 
-# --- СТРАНИЧНА ЛЕНТА ---
-st.sidebar.header("📊 Управление и Архив")
-
-if meta_headers:
-    rem = meta_headers.get('x-ratelimit-requests-remaining', '100')
-    st.sidebar.success(f"📊 Оставащи API заявки: {rem}")
-
+st.sidebar.header("📊 Управление")
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary", use_container_width=True):
     st.cache_data.clear()
-    st.sidebar.info("Кешът е изчистен! Презаредете страницата.")
-
-st.markdown("---")
 
 if not fixtures:
-    st.error("⚠️ Изчистете кеш паметта от менюто встрани или изчакайте актуализация на тиража.")
+    st.error("⚠️ Изчистете кеш паметта от страничното меню.")
 else:
     full_schedule = []
     pool_for_combo = []
     
     for item in fixtures:
-        fixture_data = item.get("fixture", {})
-        date_raw = fixture_data.get("date", "") 
-        
-        # --- БЕЗОПАСЕН И СИГУРЕН ФИКС ЗА БЪЛГАРСКО ВРЕМЕ ---
-        time_str = "00:00"
-        if date_raw and len(date_raw) >= 16:
-            try:
-                # Взимане на базовата дата без часовата зона чрез разделяне на стринга
-                base_time = date_raw[:19].replace("T", " ")
-                utc_dt = datetime.strptime(base_time, "%Y-%m-%d %H:%M:%S")
-                # Превръщане в българско време (+3 часа разлика)
-                bg_dt = utc_dt + timedelta(hours=3)
-                time_str = bg_dt.strftime("%H:%M")
-            except:
-                time_str = date_raw[11:16]
-        
+        time_str = get_clean_bg_time(item.get("fixture", {}).get("date", ""))
         teams = item.get("teams", {})
         home = teams.get("home", {}).get("name", "Домакин")
         away = teams.get("away", {}).get("name", "Гост")
-        
-        league_data = item.get("league", {})
-        country = league_data.get("country", "Световни")
+        country = item.get("league", {}).get("country", "Световни")
         
         if not home: home = "Домакин"
         if not away: away = "Гост"
-        if not country: country = "Световни"
         
         sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
         
         full_schedule.append({
-            "Час 📅": time_str, 
-            "Държава 🗺️": str(country),
-            "Мач 🏟️": f"{home} - {away}",
-            "Знак 🎯": f"{sign} ({sign_o}) [{sign_p}%]",
-            "1-во Пол. ⏱️": f"{ht_sign} ({ht_o}) [{ht_p}%]",
-            "Голове ⚽": f"{goals} ({g_o}) [{goals_p}%]",
-            "Корнери 📐": f"{corners} ({c_o}) [{corners_p}%]",
-            "Картони 🟨": f"{cards} ({card_o}) [{cards_p}%]",
-            "Сигурност": sign_p
+            "Час 📅": time_str, "Мач 🏟️": f"{home} - {away}",
+            "Знак 🎯": f"{sign} ({sign_o})", "1-во Пол. ⏱️": f"{ht_sign} ({ht_o})",
+            "Голове ⚽": f"{goals} ({g_o})", "Корнери 📐": f"{corners} ({c_o})",
+            "Картони 🟨": f"{cards} ({card_o})", "Сигурност": int(sign_p)
         })
         
-        pool_for_combo.append({
-            "Мач": f"{home} - {away}", 
-            "Прогноза": sign, 
-            "Коефициент": sign_o, 
-            "Сигурност": sign_p
-        })
+        pool_for_combo.append({"Мач": f"{home} - {away}", "Прогноза": str(sign), "Коефициент": float(sign_o), "Сигурност": int(sign_p)})
 
-    if full_schedule:
-        df = pd.DataFrame(full_schedule)
-        df = df.sort_values(by="Час 📅")
+    df = pd.DataFrame(full_schedule).sort_values(by="Час 📅")
 
-        # --- СТАТИСТИКА ЗА ДЕНЯ ---
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("🗺️ Общо мачове в тиража", len(df))
-        with col2:
-            st.metric("🎯 Основен пазар", "Българско време (БГ)")
-        with col3:
-            st.metric("⚡ Икономия на ресурси", "100% (Кеширан)")
+    # СТАТИСТИКА
+    col1, col2 = st.columns(2)
+    with col1: st.metric("🗺️ Общо мачове в тиража", len(df))
+    with col2: st.metric("⚡ Икономия", "100% Кеш")
 
-        # --- ФИЛТРИ И ТЪРСЕНЕ ---
-        st.markdown("### 🔍 Бързо търсене и филтриране")
-        search_col1, search_col2 = st.columns(2)
-        with search_col1:
-            search_query = st.text_input("🔍 Търси отбор или държава:", "").lower()
-        with search_col2:
-            min_confidence = st.slider("🎯 Минимална сигурност на знака (%):", 60, 95, 60)
+    st.markdown("---")
+    show_combo = st.checkbox("🟢 ПОКАЖИ AI КОМБИНИРАН ФИШ ЗА ДЕНЯ", value=True)
+    show_archive = st.checkbox("📉 ПОКАЖИ ВЧЕРАШНА УСПЕВАЕМОСТ (АРХИВ)", value=False)
 
-        # Прилагане на филтри към основната таблица
-        filtered_df = df.copy()
-        if search_query:
-            filtered_df = filtered_df[filtered_df["Мач 🏟️"].str.lower().str.contains(search_query) | filtered_df["Държава 🗺️"].str.lower().str.contains(search_query)]
-        filtered_df = filtered_df[filtered_df["Сигурност"] >= min_confidence]
+    # 1. Топ Фиш
+    if show_combo:
+        st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #10b981; margin-bottom: 15px;'>", unsafe_allow_html=True)
+        st.subheader("💸 AI Комбиниран Фиш (Топ 3 мача)")
+        combo_df = pd.DataFrame(pool_for_combo)
+        if not combo_df.empty:
+            top_picks = combo_df.sort_values(by="Сигурност", ascending=False).head(3)
+            total_odd = 1.0
+            for idx, row in top_picks.iterrows():
+                total_odd *= row["Коефициент"]
+                st.write(f"🔹 **{row['Мач']}** | Прогноза: **{row['Прогноза']}** | Коефициент: `{row['Коефициент']}`")
+            total_odd = round(total_odd, 2)
+            st.success(f"🟩 **Общ коефициент: {total_odd}**")
+            bet_amount = st.number_input("💵 Въведи залог (лв):", min_value=1, value=10, step=5)
+            st.info(f"💰 Чиста печалба: **{round(bet_amount * total_odd, 2)} лв.**")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        st.markdown("### 📊 AI Анализи по Пазари (БГ ВРЕМЕ)")
-        
-        if not filtered_df.empty:
-            tab1, tab2, tab3 = st.tabs(["🎯 Краен Знак & РП", "⚽ Голове & Корнери", "🟨 Картони"])
-            
-            table_style = """
-            <style>
-                table { color: white; width: 100%; border-collapse: collapse; }
-                th { background-color: #0f172a; padding: 10px; text-align: left; color: #06b6d4; font-size: 14px; }
-                td { padding: 10px; border-bottom: 1px solid #334155; font-size: 13px; white-space: nowrap; }
-            </style>
-            """
+    # 2. Архив
+    if show_archive:
+        st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #ef4444; margin-bottom: 15px;'>", unsafe_allow_html=True)
+        st.subheader(f"📊 Отчет от вчера ({yesterday_str})")
+        yesterday_fixtures, _ = fetch_secure_daily_fixtures(yesterday_str)
+        if yesterday_fixtures:
+            past_results = []
+            for item in yesterday_fixtures:
+                if item.get("fixture", {}).get("status", {}).get("short", "") == "FT":
+                    h = item.get("teams", {}).get("home", {}).get("name", "Домакин")
+                    a = item.get("teams", {}).get("away", {}).get("name", "Гост")
+                    hg = item.get("goals", {}).get("home", 0)
+                    ag = item.get("goals", {}).get("away", 0)
+                    t_s = get_clean_bg_time(item.get("fixture", {}).get("date", ""))
+                    sign, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = run_granular_local_ai(item)
+                    is_correct = "❌"
+                    if "1" in sign and hg > ag: is_correct = "✅"
+                    elif "2" in sign and ag > hg: is_correct = "✅"
+                    elif "Х" in sign and hg == ag: is_correct = "✅"
+                    past_results.append({"Час": t_s, "Мач": f"{h} - {a}", "Резултат": f"{hg}:{ag}", " AI Прогноза": sign, "Статус": is_correct})
+            if past_results:
+                st.dataframe(pd.DataFrame(past_results).sort_values(by="Час").head(15), use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-            with tab1:
-                df_tab1 = filtered_df[["Час 📅", "Мач 🏟️", "Знак 🎯", "1-во Пол. ⏱️"]]
-                html_t1 = df_tab1.to_html(index=False, classes='table', escape=False)
-                st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t1}</div>', unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("### 📊 МЕНЮ ПРОГНОЗИ ЗА ТИРАЖА")
+    
+    # СЕГА БУТОНИТЕ СА 100% НЕЗАВИСИМИ И СЕ ИЗРИСУВАТ ВИНАГИ В НАЧАЛОТО
+    show_tab1 = st.checkbox("🎯 КРАЕН ЗНАК & 1-ВО ПОЛУВРЕМЕ", value=True)
+    show_tab2 = st.checkbox("⚽ ГОЛОВЕ & КОРНЕРИ", value=False)
+    show_tab3 = st.checkbox("🟨 КАРТОНИ ЗА МАЧА", value=False)
+    
+    # 100% АВАРЕН МОБИЛЕН РЕЖИМ БЕЗ СЛУЖЕБНИ ФИЛТРИ ЗА СИГУРНОСТ
+    show_raw_text = st.checkbox("📱 ТЕКСТОВ РЕЖИМ (Включи, ако долните таблици не се виждат)", value=False)
 
-            with tab2:
-                df_tab2 = filtered_df[["Час 📅", "Мач 🏟️", "Голове ⚽", "Корнери 📐"]]
-                html_t2 = df_tab2.to_html(index=False, classes='table', escape=False)
-                st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t2}</div>', unsafe_allow_html=True)
+    table_style = "<style>table { color: white; width: 100%; border-collapse: collapse; } th { background-color: #0f172a; padding: 10px; text-align: left; color: #06b6d4; font-size: 14px; } td { padding: 10px; border-bottom: 1px solid #334155; font-size: 13px; white-space: nowrap; }</style>"
 
-            with tab3:
-                df_tab3 = filtered_df[["Час 📅", "Мач 🏟️", "Държава 🗺️", "Картони 🟨"]]
-                html_t3 = df_tab3.to_html(index=False, classes='table', escape=False)
+    if show_raw_text:
+        st.markdown("#### 📱 Списък с прогнози за деня (Чист текст):")
+        for idx, r in df.iterrows():
+            st.text(f"⏰ {r['Час 📅']} | {r['Мач 🏟️']}\n   🎯 Знак: {r['Знак 🎯']} | ⏱️ 1-во Пол: {r['1-во Пол. ⏱️']}\n   ⚽ Голове: {r['Голове ⚽']} | 📐 Корнери: {r['Корнери 📐']}\n   🟨 Картони: {r['Картони 🟨']}\n---------------------------------------")
+    else:
+        if show_tab1:
+            st.markdown("#### 🎯 Пазар: Краен Резултат (1Х2) и Полувреме (РП)")
+            df_t1 = df[["Час 📅", "Мач 🏟️", "Знак 🎯", "1-во Пол. ⏱️"]]
+            st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{df_t1.to_html(index=False, escape=False)}</div>', unsafe_allow_html=True)
+
+        if show_tab2:
+            st.markdown("#### ⚽ Пазар: Линии за Голове и Корнери")
+            df_t2 = df[["Час 📅", "Мач 🏟️", "Голове ⚽", "Корнери 📐"]]
