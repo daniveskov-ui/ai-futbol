@@ -113,52 +113,15 @@ if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary"
     st.cache_data.clear()
     st.sidebar.info("Кешът е изчистен! Презаредете страницата.")
 
-# --- ВЧЕРАШНА УСПЕВАЕМОСТ ---
-st.sidebar.markdown("---")
-st.sidebar.subheader("📉 Архив Успеваемост")
-if st.sidebar.button("📊 ЗАГРЕДИ ВЧЕРАШНА УСПЕВАЕМОСТ", type="secondary", use_container_width=True):
-    st.markdown(f"### 📊 Отчет за успеваемост от вчера ({yesterday_str})")
-    with st.spinner("⏳ Проверка на вчерашния архив..."):
-        yesterday_fixtures, _ = fetch_secure_daily_fixtures(yesterday_str)
-        if not yesterday_fixtures:
-            st.sidebar.warning("⚠️ Няма налични данни за вчерашния архив.")
-        else:
-            past_results = []
-            for item in yesterday_fixtures:
-                status = item.get("fixture", {}).get("status", {}).get("short", "")
-                if status == "FT":
-                    home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
-                    away = item.get("teams", {}).get("away", {}).get("name", "Гост")
-                    home_goals = item.get("goals", {}).get("home", 0)
-                    away_goals = item.get("goals", {}).get("away", 0)
-                    if home_goals is None: home_goals = 0
-                    if away_goals is None: away_goals = 0
-                    time_str = item.get("fixture", {}).get("date", "00:00")[11:16]
-                    
-                    sign, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = run_granular_local_ai(item)
-                    
-                    is_correct = "❌"
-                    if "1" in sign and home_goals > away_goals: is_correct = "✅"
-                    elif "2" in sign and away_goals > home_goals: is_correct = "✅"
-                    elif "Х" in sign and home_goals == away_goals: is_correct = "✅"
-                    
-                    past_results.append({
-                        "Час": time_str, "Мач": f"{home} - {away}", "Резултат": f"{home_goals}:{away_goals}",
-                        "AI Прогноза": sign, "Статус": is_correct
-                    })
-            if past_results:
-                st.dataframe(pd.DataFrame(past_results).head(20), use_container_width=True, hide_index=True)
-
 st.markdown("---")
 
 if not fixtures:
-    st.error("⚠️ Изчистете кеш паметта от менюто встрани.")
+    st.error("⚠️ Изчистете кеш паметта от менюто встрани или изчакайте актуализация на тиража.")
 else:
     full_schedule = []
     pool_for_combo = []
     
     for item in fixtures:
-        # Твърда защита срещу празни полета от API структурата
         fixture_data = item.get("fixture", {})
         date_raw = fixture_data.get("date", "")
         time_str = date_raw[11:16] if len(date_raw) >= 16 else "00:00"
@@ -201,7 +164,7 @@ else:
         with col1:
             st.metric("🗺️ Общо мачове в тиража", len(df))
         with col2:
-            st.metric("🎯 Препоръчан пазар", "Първо Полувреме")
+            st.metric("🎯 Основен пазар", "Разделен по табове")
         with col3:
             st.metric("⚡ Икономия на ресурси", "100% (Кеширан)")
 
@@ -218,9 +181,41 @@ else:
             df = df[df["Мач 🏟️"].str.lower().str.contains(search_query) | df["Държава 🗺️"].str.lower().str.contains(search_query)]
         df = df[df["Сигурност"] >= min_confidence]
 
-        # Премахване на скрития стълб и показване
-        display_df = df.drop(columns=["Сигурност"])
-
-        st.markdown("### 📊 Пълен списък с AI анализи")
+        st.markdown("### 📊 AI Анализи по Пазари")
         
-        # Подсигуряване на визуализацията чрез изрично подаване на чист DataFrame
+        if not df.empty:
+            # СЪЗДАВАНЕ НА МОБИЛНИ ТАБОВЕ ЗА ПАЗАРИТЕ
+            tab1, tab2, tab3 = st.tabs(["🎯 Краен Знак & РП", "⚽ Голове & Корнери", "🟨 Картони"])
+            
+            # CSS Стил за перфектна мобилна таблица
+            table_style = """
+            <style>
+                table { color: white; width: 100%; border-collapse: collapse; }
+                th { background-color: #0f172a; padding: 10px; text-align: left; color: #06b6d4; font-size: 14px; }
+                td { padding: 10px; border-bottom: 1px solid #334155; font-size: 13px; white-space: nowrap; }
+            </style>
+            """
+
+            with tab1:
+                st.write("📈 *Прогнози за Краен победител (1Х2) и Първо полувреме (РП):*")
+                df_tab1 = df[["Час 📅", "Мач 🏟️", "Знак 🎯", "1-во Пол. ⏱️"]]
+                html_t1 = df_tab1.to_html(index=False, classes='table', escape=False)
+                st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t1}</div>', unsafe_allow_html=True)
+
+            with tab2:
+                st.write("⚽ *Прогнози за линии на Голове (Над/Под 2.5) и Корнери (Над/Под 9.5):*")
+                df_tab2 = df[["Час 📅", "Мач 🏟️", "Голове ⚽", "Корнери 📐"]]
+                html_t2 = df_tab2.to_html(index=False, classes='table', escape=False)
+                st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t2}</div>', unsafe_allow_html=True)
+
+            with tab3:
+                st.write("🟨 *Прогнози за общ брой официални предупреждения (Над/Под 4.5):*")
+                df_tab3 = df[["Час 📅", "Мач 🏟️", "Държава 🗺️", "Картони 🟨"]]
+                html_t3 = df_tab3.to_html(index=False, classes='table', escape=False)
+                st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{html_t3}</div>', unsafe_allow_html=True)
+                
+        else:
+            st.warning("Няма намерени мачове, отговарящи на зададените филтри. Намалете слайдера за сигурност.")
+
+        # --- АВТОМАТИЧЕН КОМБИНИРАН ФИШ ---
+        st.markdown("---")
