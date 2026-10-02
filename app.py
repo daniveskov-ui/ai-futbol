@@ -28,7 +28,7 @@ def fetch_secure_daily_fixtures(date_str):
             st.error(f"🚨 Сървърна грешка от API доставчика. Статус код: {res.status_code}")
             return [], {}
     except Exception as e:
-        st.error(f"🚨 Проблем с интернет връзката или API заявката: {e}")
+        st.error(f"🚨 Проблем с internet връзката или API заявката: {e}")
         return [], {}
 
 # Бронирана функция за локалния AI алгоритъм с вградена защита срещу празни данни
@@ -97,7 +97,7 @@ def run_granular_local_ai(item):
     except:
         return "1", 60, 1.45, "Х (РП)", 65, 1.90, "Под 2.5", 65, 1.75, "Под 9.5", 60, 1.80, "Под 4.5", 60, 1.70
 
-# Функция за сигурно извличане на българско време без риск от бъгове
+# Чисто конвертиране на времето
 def get_clean_bg_time(date_raw):
     if date_raw and len(date_raw) >= 16:
         try:
@@ -108,12 +108,12 @@ def get_clean_bg_time(date_raw):
             return date_raw[11:16]
     return "00:00"
 
-# Настройка на датите
+# Дати
 today_str = datetime.now().strftime('%Y-%m-%d')
 yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
 fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
 
-# --- СТРАНИЧНА ЛЕНТА ---
+# Странична лента
 st.sidebar.header("📊 Управление")
 if meta_headers:
     rem = meta_headers.get('x-ratelimit-requests-remaining', '100')
@@ -124,7 +124,7 @@ if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary"
     st.sidebar.info("Кешът е изчистен! Презаредете страницата.")
 
 if not fixtures:
-    st.error("⚠️ Изчистете кеш паметта от менюто встрани или изчакайте актуализация на тиража.")
+    st.error("⚠️ Изчистете кеш паметта от менюто встрани.")
 else:
     full_schedule = []
     pool_for_combo = []
@@ -169,7 +169,6 @@ else:
         df = pd.DataFrame(full_schedule)
         df = df.sort_values(by="Час 📅")
 
-        # --- СТАТИСТИКА ЗА ДЕНЯ ---
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("🗺️ Общо мачове в тиража", len(df))
@@ -178,16 +177,14 @@ else:
         with col3:
             st.metric("⚡ Икономия на ресурси", "100% (Кеширан)")
 
-        # --- НАЧАЛНА СТРАНИЦА: СЕКЦИЯ С БУТОНИ ЗА ФИШ И АРХИВ ---
         st.markdown("---")
         check_col1, check_col2 = st.columns(2)
-        
         with check_col1:
             show_combo = st.checkbox("🟢 ПОКАЖИ AI КОМБИНИРАН ФИШ ЗА ДЕНЯ", value=True)
         with check_col2:
             show_archive = st.checkbox("📉 ПОКАЖИ ВЧЕРАШНА УСПЕВАЕМОСТ (АРХИВ)", value=False)
 
-        # 1. БЛОК: КОМБИНИРАН ФИШ
+        # 1. Фиш
         if show_combo:
             st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #10b981; margin-bottom: 15px;'>", unsafe_allow_html=True)
             st.subheader("💸 AI Комбиниран Фиш (Топ 3 най-сигурни мача)")
@@ -204,16 +201,20 @@ else:
                 st.info(f"💰 Потенциална печалба: **{round(bet_amount * total_odd, 2)} лв.**")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # 2. БЛОК: ВЧЕРАШЕН АРХИВ С БЪЛГАРСКО ВРЕМЕ И HTML ТАБЛИЦА
+        # 2. Архив вчера
         if show_archive:
             st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #ef4444; margin-bottom: 15px;'>", unsafe_allow_html=True)
             st.subheader(f"📊 Отчет за успеваемост от вчера ({yesterday_str})")
             with st.spinner("⏳ Зареждане на вчерашните резултати..."):
                 yesterday_fixtures, _ = fetch_secure_daily_fixtures(yesterday_str)
                 if not yesterday_fixtures:
-                    st.warning("⚠️ В момента няма налични или приключили данни за вчерашния архив.")
+                    st.warning("⚠️ В момента няма данни за вчерашния архив.")
                 else:
                     past_results = []
                     for item in yesterday_fixtures:
                         status = item.get("fixture", {}).get("status", {}).get("short", "")
                         if status == "FT":
+                            home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
+                            away = item.get("teams", {}).get("away", {}).get("name", "Гост")
+                            home_goals = item.get("goals", {}).get("home", 0)
+                            away_goals = item.get("goals", {}).get("away", 0)
