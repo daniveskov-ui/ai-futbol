@@ -207,5 +207,5 @@ else:
 
     if not filtered_df.empty:
         if show_raw_text:
-            st.markdown("#### Списък с прогнози (Чист текст):")
-            for idx, r in filtered_df.iterrows():
+            st.markdown("#### Списък с прогнози (Олекотен режим):")
+            # БРОНИРАН ЗАКЛЮЧИТЕЛЕН ФИКС: Замяна на рисковия цикъл с готов Streamlit текстов списък
