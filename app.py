@@ -178,13 +178,15 @@ else:
             st.metric("⚡ Икономия на ресурси", "100% (Кеширан)")
 
         st.markdown("---")
+        
+        # --- СЕКЦИЯ 1: КОНТРОЛНИ БУТОНИ ЗА АНАЛИЗИ И АРХИВ ---
         check_col1, check_col2 = st.columns(2)
         with check_col1:
             show_combo = st.checkbox("🟢 ПОКАЖИ AI КОМБИНИРАН ФИШ ЗА ДЕНЯ", value=True)
         with check_col2:
             show_archive = st.checkbox("📉 ПОКАЖИ ВЧЕРАШНА УСПЕВАЕМОСТ (АРХИВ)", value=False)
 
-        # 1. Фиш
+        # 1. Визуализация на Фиша
         if show_combo:
             st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #10b981; margin-bottom: 15px;'>", unsafe_allow_html=True)
             st.subheader("💸 AI Комбиниран Фиш (Топ 3 най-сигурни мача)")
@@ -201,7 +203,7 @@ else:
                 st.info(f"💰 Потенциална печалба: **{round(bet_amount * total_odd, 2)} лв.**")
             st.markdown("</div>", unsafe_allow_html=True)
 
-        # 2. Архив вчера
+        # 2. Визуализация на Архива за вчера
         if show_archive:
             st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #ef4444; margin-bottom: 15px;'>", unsafe_allow_html=True)
             st.subheader(f"📊 Отчет за успеваемост от вчера ({yesterday_str})")
@@ -216,5 +218,3 @@ else:
                         if status == "FT":
                             home = item.get("teams", {}).get("home", {}).get("name", "Домакин")
                             away = item.get("teams", {}).get("away", {}).get("name", "Гост")
-                            home_goals = item.get("goals", {}).get("home", 0)
-                            away_goals = item.get("goals", {}).get("away", 0)
