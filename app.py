@@ -179,7 +179,7 @@ else:
                     elif "Х" in sign and hg == ag: is_correct = "✅"
                     past_results.append({"Час": t_s, "Мач": f"{h} - {a}", "Резултат": f"{hg}:{ag}", " AI Прогноза": sign, "Статус": is_correct})
             if past_results:
-                st.dataframe(pd.DataFrame(past_results).sort_values(by="Час").head(15), use_container_width=True)
+                st.dataframe(pd.DataFrame(past_results).sort_values(by="Час").head(15), use_container_width=True, hide_index=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("---")
@@ -193,7 +193,6 @@ else:
     st.markdown("---")
     st.markdown("### ⚙️ Филтриране по Сигурност")
     
-    # КОРИГИРАНИ БУТОНИ С РЕАЛНИ СТОЙНОСТИ: Първият е избран по подразбиране
     filter_type = st.radio(
         "Избери ниво на сигурност за показване:",
         ["Всички налични мачове (Дефолт)", "Средна сигурност (Над 65%)", "Най-висока сигурност (Над 72%)"],
@@ -206,3 +205,7 @@ else:
     elif "Над 72%" in filter_type:
         filtered_df = filtered_df[filtered_df["Сигурност"] >= 72]
 
+    if not filtered_df.empty:
+        if show_raw_text:
+            st.markdown("#### Списък с прогнози (Чист текст):")
+            for idx, r in filtered_df.iterrows():
