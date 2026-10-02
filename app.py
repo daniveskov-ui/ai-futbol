@@ -11,7 +11,6 @@ st.write("Икономичен режим: 1 заявка за деня. Авт�
 API_KEY = "ca61b57dd810980c1604d630c470309e"
 API_HOST = "v3.football.api-sports.io"
 
-# Дълбоко кеширане за защита на лимита (24 часа)
 @st.cache_data(ttl=86400)
 def fetch_secure_daily_fixtures(date_str):
     url = f"https://{API_HOST}/fixtures?date={date_str}"
@@ -27,7 +26,6 @@ def fetch_secure_daily_fixtures(date_str):
     except:
         return [], {}
 
-# Брониран AI алгоритъм с твърда защита срещу празни стойности за корнери и картони
 def run_granular_local_ai(item):
     try:
         home_id = item.get("teams", {}).get("home", {}).get("id", 1)
@@ -45,7 +43,6 @@ def run_granular_local_ai(item):
             home_power += 5
         delta = home_power - away_power
         
-        # 1. Пазар: Твърд знак
         if delta > 16: 
             sign = "1"
             sign_p = min(75 + (home_id % 12), 92)
@@ -59,7 +56,6 @@ def run_granular_local_ai(item):
             sign_p = min(60 + (home_id % 15), 78)
             odd_val = round(2.90 + (home_id % 5) / 10, 2)
         
-        # 2. Пазар: Първо Полувреме
         if sign == "1" and delta > 22: 
             ht_sign, ht_p = "1 (РП)", min(sign_p - 5, 85)
             ht_odd = round(odd_val * 1.35, 2)
@@ -70,7 +66,6 @@ def run_granular_local_ai(item):
             ht_sign, ht_p = "Х (РП)", min(74 + (home_id % 12), 89)
             ht_odd = round(1.85 + (home_id % 4) / 10, 2)
         
-        # 3. Пазар: Голове
         if abs(delta) < 6 or "scotland" in league.lower() or "iceland" in league.lower():
             goals, goals_p = "Над 2.5", min(70 + (home_id % 14), 89)
             g_odd = round(1.65 + (home_id % 3) / 10, 2)
@@ -78,13 +73,11 @@ def run_granular_local_ai(item):
             goals, goals_p = "Под 2.5", min(72 + (away_id % 14), 91)
             g_odd = round(1.70 + (away_id % 3) / 10, 2)
         
-        # 4. Пазар: Корнери (Пълна защита)
         if goals == "Над 2.5" or any(w in league.lower() for w in ["england", "scotland", "japan"]):
             corners, corners_p, c_odd = "Над 9.5", min(68 + (home_id % 15), 88), round(1.80 + (home_id % 3) / 10, 2)
         else: 
             corners, corners_p, c_odd = "Под 9.5", min(70 + (away_id % 13), 87), round(1.75 + (away_id % 3) / 10, 2)
         
-        # 5. Пазар: Картони (Пълна защита)
         if sign == "Х" or any(w in league.lower() for w in ["spain", "italy", "brazil"]):
             cards, cards_p, card_odd = "Над 4.5", min(72 + (home_id % 14), 90), round(1.90 + (home_id % 3) / 10, 2)
         else: 
@@ -94,7 +87,6 @@ def run_granular_local_ai(item):
     except:
         return "1", 65, 1.45, "Х (РП)", 70, 1.90, "Под 2.5", 70, 1.75, "Под 9.5", 65, 1.80, "Под 4.5", 65, 1.70
 
-# Българско време
 def get_clean_bg_time(date_raw):
     if date_raw and len(date_raw) >= 16:
         try:
@@ -133,22 +125,16 @@ else:
         sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
         
         full_schedule.append({
-            "Час 📅": time_str, 
-            "Държава 🗺️": str(country), 
-            "Мач 🏟️": f"{home} - {away}",
-            "Знак 🎯": f"{sign} ({sign_o})", 
-            "1-во Пол. ⏱️": f"{ht_sign} ({ht_o})",
-            "Голове ⚽": f"{goals} ({g_o})", 
-            "Корнери 📐": f"{corners} ({c_o})",
-            "Картони 🟨": f"{cards} ({card_o})", 
-            "Сигурност": int(sign_p)
+            "Час 📅": time_str, "Държава 🗺️": str(country), "Мач 🏟️": f"{home} - {away}",
+            "Знак 🎯": f"{sign} ({sign_o})", "1-во Пол. ⏱️": f"{ht_sign} ({ht_o})",
+            "Голове ⚽": f"{goals} ({g_o})", "Корнери 📐": f"{corners} ({c_o})",
+            "Картони 🟨": f"{cards} ({card_o})", "Сигурност": int(sign_p)
         })
         
         pool_for_combo.append({"Мач": f"{home} - {away}", "Прогноза": str(sign), "Коефициент": float(sign_o), "Сигурност": int(sign_p)})
 
     df = pd.DataFrame(full_schedule).sort_values(by="Час 📅")
 
-    # СТАТИСТИКА Горна част
     col1, col2 = st.columns(2)
     with col1: st.metric("🗺️ Общо мачове в тиража", len(df))
     with col2: st.metric("⚡ Икономия", "100% Кеш")
@@ -157,7 +143,6 @@ else:
     show_combo = st.checkbox("🟢 ПОКАЖИ AI КОМБИНИРАН ФИШ ЗА ДЕНЯ", value=True)
     show_archive = st.checkbox("📉 ПОКАЖИ ВЧЕРАШНА УСПЕВАЕМОСТ (АРХИВ)", value=False)
 
-    # 1. Фиш
     if show_combo:
         st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #10b981; margin-bottom: 15px;'>", unsafe_allow_html=True)
         st.subheader("💸 AI Комбиниран Фиш (Топ 3 мача)")
@@ -174,7 +159,6 @@ else:
             st.info(f"💰 Чиста печалба: **{round(bet_amount * total_odd, 2)} лв.**")
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # 2. Архив
     if show_archive:
         st.markdown("<div style='background-color: #0f172a; padding: 15px; border-radius: 10px; border: 2px solid #ef4444; margin-bottom: 15px;'>", unsafe_allow_html=True)
         st.subheader(f"📊 Отчет от вчера ({yesterday_str})")
@@ -207,9 +191,17 @@ else:
     show_raw_text = st.checkbox("📱 ТЕКСТОВ РЕЖИМ (Включи при проблеми с таблиците)", value=False)
 
     st.markdown("---")
-    st.markdown("### 🔍 Търсене и Настройки")
+    st.markdown("### ⚙️ Филтриране по Сигурност")
     
-    # 1. Слайдерът за сигурност - напълно чист стълб
-    min_confidence = st.slider("Минимална Сигурност на знака (%):", 60, 95, 60)
+    # НОВИ БЕЗОПАСНИ БУТОНИ ЗА СИГУРНОСТТА - ЗАМЕСТВАТ СЛАЙДЕРА
+    filter_type = st.radio(
+        "Избери ниво на сигурност за показване:",
+        ["Всички мачове за деня (60%+)", "Топ мачове (70%+ сигурност)", "Супер сигурни (80%+ сигурност)"]
+    )
     
-    # 2. Търсачката - БЕЗ емоджита или специални символи в етикета, за да спрем мобилния бъг
+    filtered_df = df.copy()
+    if "70%+" in filter_type:
+        filtered_df = filtered_df[filtered_df["Сигурност"] >= 70]
+    elif "80%+" in filter_type:
+        filtered_df = filtered_df[filtered_df["Сигурност"] >= 80]
+
