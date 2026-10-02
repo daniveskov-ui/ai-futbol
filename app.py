@@ -131,7 +131,7 @@ else:
             "Картони 🟨": f"{cards} ({card_o})", "Сигурност": int(sign_p)
         })
         
-        pool_for_combo.append({"Мач": f"{home} - {away}", "Прогноза": str(sign), "Коефициент": float(sign_o), "Сигурност": int(sign_p)})
+        pool_for_combo.append({"Мач": f"{home} - {away}", "Prognоza": str(sign), "Коефициент": float(sign_o), "Сигурност": int(sign_p)})
 
     df = pd.DataFrame(full_schedule).sort_values(by="Час 📅")
 
@@ -152,7 +152,7 @@ else:
             total_odd = 1.0
             for idx, row in top_picks.iterrows():
                 total_odd *= row["Коефициент"]
-                st.write(f"🔹 **{row['Мач']}** | Прогноза: **{row['Прогноза']}** | Коефициент: `{row['Коефициент']}`")
+                st.write(f"🔹 **{row['Мач']}** | Прогноза: **{row['Prognоza']}** | Коефициент: `{row['Коефициент']}`")
             total_odd = round(total_odd, 2)
             st.success(f"🟩 **Общ коефициент: {total_odd}**")
             bet_amount = st.number_input("💵 Въведи залог (лв):", min_value=1, value=10, step=5)
