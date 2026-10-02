@@ -32,7 +32,6 @@ def run_granular_local_ai(item):
     try:
         home_id = item.get("teams", {}).get("home", {}).get("id", 1)
         away_id = item.get("teams", {}).get("away", {}).get("id", 2)
-        league = item.get("league", {}).get("name", "Лига")
         
         if home_id is None: home_id = 1
         if away_id is None: away_id = 2
@@ -95,9 +94,10 @@ fixtures, meta_headers = fetch_secure_daily_fixtures(today_str)
 st.sidebar.header("📊 Управление")
 if st.sidebar.button("🔄 ИЗЧИСТИ КЕШ ПАМЕТТА", type="primary", use_container_width=True):
     st.cache_data.clear()
+    st.rerun()
 
 if not fixtures:
-    st.error("⚠️ Изчистете кеш паметта от страничното меню.")
+    st.error("⚠️ Няма заредени мачове или лимитът е достигнат. Изчистете кеш паметта от страничното меню.")
 else:
     full_schedule = []
     pool_for_combo = []
@@ -107,7 +107,6 @@ else:
         teams = item.get("teams", {})
         home = teams.get("home", {}).get("name", "Домакин")
         away = teams.get("away", {}).get("name", "Гост")
-        country = item.get("league", {}).get("country", "Световни")
         
         if not home: home = "Домакин"
         if not away: away = "Гост"
@@ -115,13 +114,22 @@ else:
         sign, sign_p, sign_o, ht_sign, ht_p, ht_o, goals, goals_p, g_o, corners, corners_p, c_o, cards, cards_p, card_o = run_granular_local_ai(item)
         
         full_schedule.append({
-            "Час 📅": time_str, "Мач 🏟️": f"{home} - {away}",
-            "Знак 🎯": f"{sign} ({sign_o})", "1-во Пол. ⏱️": f"{ht_sign} ({ht_o})",
-            "Голове ⚽": f"{goals} ({g_o})", "Корнери 📐": f"{corners} ({c_o})",
-            "Картони 🟨": f"{cards} ({card_o})", "Сигурност": int(sign_p)
+            "Час 📅": time_str, 
+            "Мач 🏟️": f"{home} - {away}",
+            "Знак 🎯": f"{sign} ({sign_o})", 
+            "1-во Пол. ⏱️": f"{ht_sign} ({ht_o})",
+            "Голове ⚽": f"{goals} ({g_o})", 
+            "Корнери 📐": f"{corners} ({c_o})",
+            "Картони 🟨": f"{cards} ({card_o})", 
+            "Сигурност": int(sign_p)
         })
         
-        pool_for_combo.append({"Мач": f"{home} - {away}", "Прогноза": str(sign), "Коефициент": float(sign_o), "Сигурност": int(sign_p)})
+        pool_for_combo.append({
+            "Мач": f"{home} - {away}", 
+            "Прогноза": str(sign), 
+            "Коефициент": float(sign_o), 
+            "Сигурност": int(sign_p)
+        })
 
     df = pd.DataFrame(full_schedule).sort_values(by="Час 📅")
 
@@ -178,26 +186,22 @@ else:
     st.markdown("---")
     st.markdown("### 📊 МЕНЮ ПРОГНОЗИ ЗА ТИРАЖА")
     
-    # СЕГА БУТОНИТЕ СА 100% НЕЗАВИСИМИ И СЕ ИЗРИСУВАТ ВИНАГИ В НАЧАЛОТО
-    show_tab1 = st.checkbox("🎯 КРАЕН ЗНАК & 1-ВО ПОЛУВРЕМЕ", value=True)
-    show_tab2 = st.checkbox("⚽ ГОЛОВЕ & КОРНЕРИ", value=False)
-    show_tab3 = st.checkbox("🟨 КАРТОНИ ЗА МАЧА", value=False)
+    # Филтриращ блок в реално време без презареждане на API-то
+    search_query = st.text_input("🔍 Търсене на отбор / мач в тиража:", "").strip().lower()
     
-    # 100% АВАРЕН МОБИЛЕН РЕЖИМ БЕЗ СЛУЖЕБНИ ФИЛТРИ ЗА СИГУРНОСТ
-    show_raw_text = st.checkbox("📱 ТЕКСТОВ РЕЖИМ (Включи, ако долните таблици не се виждат)", value=False)
+    # Генериране на часови диапазони за филтър
+    hours = sorted(list(df["Час 📅"].apply(lambda x: x.split(":")[0]).unique()))
+    selected_hours = st.multiselect("⏰ Филтрирай по час на започване:", options=hours, default=hours)
+    
+    # Прилагане на филтрите върху Dataframe-а
+    filtered_df = df.copy()
+    if selected_hours:
+        filtered_df = filtered_df[filtered_df["Час 📅"].apply(lambda x: x.split(":")[0]).isin(selected_hours)]
+    if search_query:
+        filtered_df = filtered_df[filtered_df["Мач 🏟️"].str.lower().str.contains(search_query)]
 
-    table_style = "<style>table { color: white; width: 100%; border-collapse: collapse; } th { background-color: #0f172a; padding: 10px; text-align: left; color: #06b6d4; font-size: 14px; } td { padding: 10px; border-bottom: 1px solid #334155; font-size: 13px; white-space: nowrap; }</style>"
-
-    if show_raw_text:
-        st.markdown("#### 📱 Списък с прогнози за деня (Чист текст):")
-        for idx, r in df.iterrows():
-            st.text(f"⏰ {r['Час 📅']} | {r['Мач 🏟️']}\n   🎯 Знак: {r['Знак 🎯']} | ⏱️ 1-во Пол: {r['1-во Пол. ⏱️']}\n   ⚽ Голове: {r['Голове ⚽']} | 📐 Корнери: {r['Корнери 📐']}\n   🟨 Картони: {r['Картони 🟨']}\n---------------------------------------")
+    # Извеждане на крайния списък
+    if not filtered_df.empty:
+        st.dataframe(filtered_df, use_container_width=True, hide_index=True)
     else:
-        if show_tab1:
-            st.markdown("#### 🎯 Пазар: Краен Резултат (1Х2) и Полувреме (РП)")
-            df_t1 = df[["Час 📅", "Мач 🏟️", "Знак 🎯", "1-во Пол. ⏱️"]]
-            st.markdown(f'<div style="overflow-x:auto; background-color: #1e293b; padding: 10px; border-radius: 8px;">{table_style}{df_t1.to_html(index=False, escape=False)}</div>', unsafe_allow_html=True)
-
-        if show_tab2:
-            st.markdown("#### ⚽ Пазар: Линии за Голове и Корнери")
-            df_t2 = df[["Час 📅", "Мач 🏟️", "Голове ⚽", "Корнери 📐"]]
+        st.warning("Няма намерени мачове, съвпадащи с избраните филтри.")
