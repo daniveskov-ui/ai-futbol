@@ -8,7 +8,7 @@ st.set_page_config(page_title="AI Футбол Трейдър - Автомати
 st.markdown("<h2 style='text-align: center; color: #06b6d4;'>⚽ AI Симулатор: Пълен Световен Тираж</h2>", unsafe_allow_html=True)
 st.write("Икономичен режим: 1 заявка за деня. Автоматично зареждане на абсолютно всички мачове по света по часове.")
 
-API_KEY = "c21f7bfd4414dea310f1262837a3074e"
+API_KEY = "ca61b57dd810980c1604d630c470309e"
 API_HOST = "v3.football.api-sports.io"
 
 # Дълбоко кеширане за абсолютна защита на лимита (24 часа) с диагностика на грешки
